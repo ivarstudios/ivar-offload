@@ -10,6 +10,8 @@ Back up your memory cards safely, and sort the videos from the photos. For Windo
 Nothing is ever overwritten, and nothing is deleted before its copy has been checked. If a job stops halfway (a loose
 cable, a crash, a power cut), **Resume** picks up where it left off.
 
+![The Backup tab: a card on the left, the backup drive and the new folder's name on the right](docs/screenshot-backup.png)
+
 ## Download
 
 Get the latest zip from [Releases](https://github.com/ivarstudios/ivar-offload/releases):
