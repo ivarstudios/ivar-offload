@@ -16,10 +16,10 @@ public static partial class SourceGuards
 {
     /// <summary>The one wording used wherever a memory-card-like source is flagged. {0}: the drive, e.g. "F: SONY_A".</summary>
     public const string MemoryCardWarningFormat =
-        "This looks like a memory card or camera drive ({0}). Sort moves files around on it. " +
-        "Back the card up to another drive first (the Backup tab) and sort the backup.";
+        "This looks like a memory card or camera drive ({0}). A sort moves files to different folders on it. " +
+        "First, use the Backup tab to back up the card to a different drive. Then sort the backup.";
 
-    public const string CannotRemoveError = "Files can't be moved out of this folder (read-only drive or no permission).";
+    public const string CannotRemoveError = "Files cannot move out of this folder (read-only drive or no permission).";
 
     /// <summary>
     /// Folders cameras create at the root of a memory card. DCIM, PRIVATE and AVCHD only count together with the camera
@@ -134,7 +134,7 @@ public static partial class SourceGuards
             : folders.Personal.FirstOrDefault(p => Same(source, p.Path)) is { Path.Length: > 0 } personal ? $"your {personal.Name} folder"
             : null;
         return broad is null ? null : new PlanMessage(MessageLevel.Warning,
-            $"You picked {broad}. Sorting it moves every {Planner.Word(mode)[..^1]} in it, not just your card backups - choose the folder with the card backups.");
+            $"You selected {broad}. If you sort it, every {Planner.Word(mode)[..^1]} in it moves, not only your card backups. Choose the folder with the card backups.");
     }
 
     /// <summary>
@@ -149,7 +149,8 @@ public static partial class SourceGuards
             if (Path.GetFileName(p) is { Length: > 0 } name
                 && (MediaRules.ApplicationLibraryKind(name) ?? (MediaRules.IsLuminarCatalogFolder(name, files(p)) ? MediaRules.LuminarCatalogKind : null)) is { } kind)
                 return new PlanMessage(MessageLevel.Error,
-                    $"This folder is inside an application library: {kind} ({p}). Moving files out of it would break the library - choose the folder with the card backups instead.");
+                    $"This folder is inside an application library: {kind} ({p}). If you move files out of it, the library will not work correctly. "
+                    + "Choose the folder with the card backups instead.");
 
         // A project file in the source folder itself is handled by the classifier: everything then stays.
         for (string? p = Path.GetDirectoryName(source); !string.IsNullOrEmpty(p); p = Path.GetDirectoryName(p))

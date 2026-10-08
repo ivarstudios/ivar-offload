@@ -18,7 +18,7 @@ public static partial class Planner
             messages.Add(new PlanMessage(MessageLevel.Warning,
                 $"{large.Count:N0} unrecognized file(s) of 100 MB or more ({Format.Bytes(large.Sum(f => f.Size))}) stay in place: "
                 + Examples(large.Select(f => $"{f.Name} ({Format.Bytes(f.Size)})"), large.Count, 3)
-                + ". They may be videos or photos in a format IVAR Offload does not know - check them before deleting or formatting anything."));
+                + ". They can be videos or photos in a format that IVAR Offload does not know. Check them before you delete or format anything."));
         AddNoteSummary(messages, files, FileNote.FollowsByName, MessageLevel.Warning, videos
             ? "file(s) of unrecognized types have the same name as a video next to them and go with it"
             : "file(s) of unrecognized types have the same name as a video next to them and stay with it");
@@ -31,19 +31,21 @@ public static partial class Planner
             int undecided = online.Count(f => f.NaturalSide == MediaSide.Neutral && MediaRules.PrimarySide(f.Extension) == MediaSide.Video);
             messages.Add(new PlanMessage(MessageLevel.Warning,
                 $"{online.Count:N0} online-only cloud file(s) are not downloaded and stay in place ({Format.Bytes(online.Sum(f => f.Size))}): {TypeList(online)}."
-                + (wouldMove == 0 ? "" : $" {Count(wouldMove, mode)} of them would move")
-                + (undecided == 0 ? "" : (wouldMove == 0 ? " " : "; ")
-                    + $"{undecided:N0} short clip(s) named like a photo next to them may be Live Photo clips or videos, which can only be told once they are downloaded")
-                + (wouldMove + undecided == 0 ? "" : ": make the folder available offline (right-click > Always keep on this device), wait for the download, then check again.")));
+                + (wouldMove == 0 ? "" : $" When these files are on this device, {Count(wouldMove, mode)} of them will move.")
+                + (undecided == 0 ? "" : $" {undecided:N0} short clip(s) have the same name as a photo next to them. "
+                    + "IVAR Offload can identify them as Live Photo clips or videos only after you download them.")
+                + (wouldMove + undecided == 0 ? "" : " To sort them, make the folder available offline (right-click > Always keep on this device). "
+                    + "When the download is complete, check again.")));
         }
-        AddNoteSummary(messages, files, FileNote.Link, MessageLevel.Info, "link(s) or shortcut(s) are not followed");
-        AddNoteSummary(messages, files, FileNote.LeftoverTemp, MessageLevel.Warning, "unfinished temporary file(s) from an earlier IVAR Offload (or IVAR Ingest, Ingest Sorter) job were found");
+        AddNoteSummary(messages, files, FileNote.Link, MessageLevel.Info, "link(s) or shortcut(s) stay in place, and the sort does not follow them");
+        AddNoteSummary(messages, files, FileNote.LeftoverTemp, MessageLevel.Warning,
+            "unfinished temporary file(s) from an earlier IVAR Offload (or IVAR Ingest, Ingest Sorter) job are in the source folder");
 
         var audio = files.Where(f => f.Note == FileNote.UnmatchedAudio).ToList();
         if (audio.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Info,
-                $"{audio.Count:N0} audio recording(s) ({Format.Bytes(audio.Sum(f => f.Size))}) with no matching photo "
-                + (videos ? "go with the videos" : "count as video sound and stay") + ": " + FolderExamples(audio, 3) + "."));
+                $"{audio.Count:N0} audio recording(s) ({Format.Bytes(audio.Sum(f => f.Size))}) have no photo of the same name, so they "
+                + (videos ? "go with the videos" : "stay with the videos as video sound") + ": " + FolderExamples(audio, 3) + "."));
 
         var live = files.Where(f => f.Note == FileNote.LivePhoto).ToList();
         if (live.Count > 0)
@@ -53,14 +55,14 @@ public static partial class Planner
         var sameName = files.Where(f => f.Note == FileNote.NotLivePhoto).ToList();
         if (sameName.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{sameName.Count:N0} video(s) have the same name as a photo next to them but are not Live Photo clips (no Apple Live Photo tag), "
-                + $"so they are treated as videos and {(videos ? "move" : "stay")}: "
+                $"{sameName.Count:N0} video(s) have the same name as a photo next to them, but they are not Live Photo clips (no Apple Live Photo tag). "
+                + $"IVAR Offload treats them as videos, so they {(videos ? "move" : "stay")}: "
                 + Examples(sameName.Select(f => $"{f.RelativePath} ({Format.Bytes(f.Size)})"), sameName.Count, 3)
-                + ". Another camera probably used the same numbers - check that they are videos."));
+                + ". Probably another camera used the same file numbers. Check that they are videos."));
         var notLive = files.Where(f => f.Note == FileNote.LivePhotoTooLarge).ToList();
         if (notLive.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Info,
-                $"{notLive.Count:N0} video(s) have the same name as a photo but are too large to be Live Photo clips, so they are treated as videos: "
+                $"{notLive.Count:N0} video(s) have the same name as a photo, but they are too large for Live Photo clips. IVAR Offload treats them as videos: "
                 + Examples(notLive.Select(f => $"{f.RelativePath} ({Format.Bytes(f.Size)})"), notLive.Count, 3) + "."));
 
         AddUnitSummaries(messages, scan, mode);
@@ -68,10 +70,10 @@ public static partial class Planner
         var runs = SplitFrameRuns(files);
         if (runs.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{runs.Count:N0} sound file(s) are named after numbered frames that are not treated as a clip (too few frames, missing "
-                + "frames, or no CinemaDNG tags), so the sound goes with the videos and the frames stay photos: "
+                $"{runs.Count:N0} sound file(s) have numbered frames with their name next to them, but IVAR Offload does not treat these frames as a clip "
+                + "(too few frames, missing frames, or no CinemaDNG tags). The sound goes with the videos, and the frames go with the photos: "
                 + Examples(runs.Select(r => $"{r.Sound.RelativePath} ({Files(r.Frames.Count)})"), runs.Count, 3)
-                + ". If they are one clip, keep them together by hand."));
+                + ". If they are one clip, keep them together manually."));
 
         // By the classifier's note: a frame held back by a name clash in the target is still a hyperlapse frame.
         var hyperlapses = files.Where(f => (f.Classified?.Note ?? f.Note) == FileNote.HyperlapseFrame).GroupBy(f => f.GroupKey, StringComparer.OrdinalIgnoreCase)
@@ -79,56 +81,56 @@ public static partial class Planner
             .OrderBy(h => h.Folder, StringComparer.OrdinalIgnoreCase).ToList();
         if (hyperlapses.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{hyperlapses.Count:N0} DJI hyperlapse folder(s) hold the source frames of a hyperlapse: "
+                $"{hyperlapses.Count:N0} DJI hyperlapse folder(s) hold the still frames of a hyperlapse: "
                 + Examples(hyperlapses.Select(h => $"{Display(h.Folder)} ({h.Frames:N0} frames)"), hyperlapses.Count, 3)
                 + (videos
-                    ? ". They are photos and stay together with the photos, while the finished hyperlapse video moves with the videos. "
-                    : ". They are photos and move together with the photos, while the finished hyperlapse video stays with the videos. ")
-                + "Move a folder by hand if you edit the hyperlapse from its frames."));
+                    ? ". They are photos and stay together with the photos, but the finished hyperlapse video moves with the videos. "
+                    : ". They are photos and move together with the photos, but the finished hyperlapse video stays with the videos. ")
+                + "If you edit the hyperlapse from its frames, move the folder manually."));
 
         var survey = files.Where(f => f.Note == FileNote.SurveyData).ToList();
         if (!videos && survey.Count > 0 && moving.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                "Survey data outside the mapping mission folders stays in the source: "
+                "Survey data outside the mapping mission folders stays in the source folder: "
                 + Examples(survey.GroupBy(f => f.Directory, StringComparer.OrdinalIgnoreCase)
                     .Select(g => $"{Display(g.Key)} ({string.Join(", ", g.Select(f => f.Name).Order(StringComparer.OrdinalIgnoreCase).Take(3))}{(g.Count() > 3 ? ", ..." : "")})"),
                     survey.Select(f => f.Directory).Distinct(StringComparer.OrdinalIgnoreCase).Count(), 3)
-                + ". Copy it next to the photos if you process PPK or use ground control points."));
+                + ". If you process PPK or use ground control points, copy it next to the photos."));
 
         var catalogs = files.Where(f => MediaRules.CatalogExtensions.Contains(f.Extension)).Select(f => f.Name)
             .Concat(scan.SkippedFolders.Where(s => s.LibraryKind is "Capture One catalog" or MediaRules.LuminarCatalogKind).Select(s => Path.GetFileName(s.RelativePath)))
             .ToList();
         if (catalogs.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"This folder holds a photo catalog or session ({Examples(catalogs, catalogs.Count, 3)}). Photos and videos already imported there "
-                + "will show as missing after the move - relink them to their new place in the target folder."));
+                $"The source folder holds a photo catalog or session ({Examples(catalogs, catalogs.Count, 3)}). After the move, the catalog will show "
+                + "the photos and videos that you imported into it as missing. Relink them to their new place in the target folder."));
 
         if (scan.SkippedFolders.Any(s => s.RelativePath.Split('\\')[^1].Equals("ascmhl", StringComparison.OrdinalIgnoreCase))
             || files.Any(f => f.Extension == ".mhl"))
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                "This folder has checksum manifests from your backup tool (ASC MHL). After sorting they will report the moved files as missing; "
-                + $"IVAR Offload's receipt in {Jobs.JobPaths.LogFolderName} records where each file went."));
+                "The source folder has checksum manifests from your backup tool (ASC MHL). After the sort, these manifests will show the moved files as missing. "
+                + $"The IVAR Offload receipt in {Jobs.JobPaths.LogFolderName} records where each file went."));
 
         var libraries = scan.SkippedFolders.Where(s => s.LibraryKind is not null).ToList();
         if (libraries.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Info,
-                $"{libraries.Count:N0} application librar{(libraries.Count == 1 ? "y is" : "ies are")} left untouched (not scanned): "
+                $"The sort does not scan or change {libraries.Count:N0} application librar{(libraries.Count == 1 ? "y" : "ies")}: "
                 + Examples(libraries.Select(s => $"{s.RelativePath} ({s.LibraryKind})"), libraries.Count, 4) + "."));
 
         if (split.Count > 0)
         {
             var worst = split.OrderByDescending(p => p.Value.Count).ThenBy(p => p.Key, StringComparer.OrdinalIgnoreCase).ToList();
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{split.Count:N0} folder(s) will be split - files next to your {Word(mode)} stay behind (e.g. "
+                $"The sort will split {split.Count:N0} folder(s): files next to your {Word(mode)} stay in the source folder (for example "
                 + string.Join("; ", worst.Take(3).Select(p => $"{Display(p.Key)}: {ExtensionCounts(p.Value, 4)}"))
-                + (split.Count > 3 ? "; ..." : "") + "). They may belong to the files that move - check them before deleting or formatting the source."));
+                + (split.Count > 3 ? "; ..." : "") + "). They can belong to the files that move. Check them before you delete the source folder or format its drive."));
         }
 
         foreach (string problem in scan.Problems)
-            messages.Add(new PlanMessage(MessageLevel.Warning, $"Could not read folder {problem}"));
+            messages.Add(new PlanMessage(MessageLevel.Warning, $"The scan could not read the folder {problem}"));
         if (scan.SkippedFolders.Count > 0)
-            messages.Add(new PlanMessage(MessageLevel.Info, "Not scanned: " + string.Join(", ",
-                scan.SkippedFolders.Take(8).Select(s => $"{s.RelativePath} ({s.Reason})")) + (scan.SkippedFolders.Count > 8 ? ", ..." : "")));
+            messages.Add(new PlanMessage(MessageLevel.Info, "The scan skipped these folders: " + string.Join(", ",
+                scan.SkippedFolders.Take(8).Select(s => $"{s.RelativePath} ({s.Reason})")) + (scan.SkippedFolders.Count > 8 ? ", ..." : ".")));
     }
 
     private static void AddUnitSummaries(List<PlanMessage> messages, ScanResult scan, MoveMode mode)
@@ -145,32 +147,33 @@ public static partial class Planner
             messages.Add(new PlanMessage(MessageLevel.Info,
                 $"{clips.Count:N0} image-sequence clip(s) ({Format.Bytes(clips.Sum(u => u.Bytes))}) are videos, not photos: "
                 + Examples(clips.Select(u => $"{u.Description} in {Display(u.Folder)}"), clips.Count, 3)
-                + (videos ? " - they go with the videos." : " - they stay with the videos.")));
+                + (videos ? ". They go with the videos." : ". They stay with the videos.")));
         var gaps = clips.Where(u => u.MissingFrames > 0).ToList();
         if (gaps.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{gaps.Count:N0} CinemaDNG clip(s) have missing frames and are kept together as one clip anyway: "
+                $"{gaps.Count:N0} CinemaDNG clip(s) have missing frames, but each one still stays together as one clip: "
                 + Examples(gaps.Select(u => $"{Display(u.Folder)} ({u.MissingFrames:N0} missing)"), gaps.Count, 3)
                 + ". Check the card or its backup for the missing frames."));
 
         var missions = scan.Units.Where(u => u.Kind == UnitKind.Mission).ToList();
         if (missions.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Info,
-                $"{missions.Count:N0} mapping/LiDAR mission(s) are kept whole "
+                $"{missions.Count:N0} mapping/LiDAR mission(s) stay whole "
                 + (videos ? "(they stay with the photos): " : "(images, timestamps, RINEX/PPK and LiDAR files move together): ")
                 + Examples(missions.Select(u => Display(u.Folder)), missions.Count, 3) + "."));
 
         var projects = scan.Units.Where(u => u.Kind == UnitKind.Project).ToList();
         int inProjects = scan.Files.Count(f => f.Note == FileNote.InProject && f.NaturalSide == MediaRules.SideFor(mode));
-        string staying = inProjects == 0 ? "" : $" {Count(inProjects, mode)} in them stay{(inProjects == 1 ? "s" : "")} in the source.";
+        string staying = inProjects == 0 ? "" : $" {Count(inProjects, mode)} in them stay{(inProjects == 1 ? "s" : "")} in the source folder.";
         if (projects.FirstOrDefault(u => u.Folder.Length == 0) is { } whole)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"The source folder is itself an editing/processing project: {whole.Description}. Nothing in it will move - "
-                + "choose the folder with the card backups instead." + staying));
+                $"The source folder is itself an editing/processing project: {whole.Description}. Nothing in it will move. "
+                + "Choose the folder with the card backups instead." + staying));
         else if (projects.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{projects.Count:N0} editing/processing project folder(s) found - everything in them stays so the projects keep their media: "
-                + Examples(projects.Select(u => $"{u.Description} in {u.Folder}"), projects.Count, 3) + "." + staying));
+                $"{projects.Count:N0} editing/processing project folder(s) are in the source folder: "
+                + Examples(projects.Select(u => $"{u.Description} in {u.Folder}"), projects.Count, 3)
+                + ". Everything in them stays, so that the projects keep their media." + staying));
     }
 
     private static string Files(int count) => count == 1 ? "1 file" : $"{count:N0} files";
@@ -277,8 +280,8 @@ public static partial class Planner
         FileNote.FollowsByName => "Unrecognized, follows video",
         FileNote.LivePhoto => "Live Photo clip",
         FileNote.InProject => "Inside a project",
-        FileNote.DifferentInTarget => "Name taken in target (different)",
-        FileNote.HeldWithGroup => "Held with its clip",
+        FileNote.DifferentInTarget => "Name taken in target folder (different)",
+        FileNote.HeldWithGroup => "Kept with its clip",
         FileNote.NotLivePhoto => "Video (a photo's name)",
         FileNote.SurveyData => "Survey data",
         FileNote.HyperlapseFrame => "Hyperlapse frame",

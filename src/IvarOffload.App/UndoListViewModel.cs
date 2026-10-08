@@ -34,7 +34,7 @@ public sealed class UndoListViewModel : ObservableObject
 
     private readonly IDialogs _dialogs;
     private UndoRow? _selected;
-    private string _status = "Looking for earlier sorts...";
+    private string _status = "Search for earlier sorts in progress...";
     private bool _busy;
     private string? _lastFolder;
 
@@ -44,7 +44,7 @@ public sealed class UndoListViewModel : ObservableObject
         ChooseFolderCommand = new AsyncCommand(ChooseFolderAsync, () => !IsBusy, ShowError);
         OpenLogCommand = new AsyncCommand(OpenLogAsync, () => !IsBusy, ShowError);
         UndoCommand = new RelayCommand(Choose, () => Selected is { } row && JobTexts.CanTryUndo(row.Job));
-        if (load) _ = AddAsync(() => JobCatalog.Recent(), select: false, "No earlier sorts are remembered on this PC. Choose a folder, or open a log file.", startedFrom: null);
+        if (load) _ = AddAsync(() => JobCatalog.Recent(), select: false, "This PC does not remember any earlier sorts. Choose a folder, or open a log file.", startedFrom: null);
     }
 
     public ObservableCollection<UndoRow> Rows { get; } = [];
@@ -62,8 +62,8 @@ public sealed class UndoListViewModel : ObservableObject
 
     /// <summary>Why the selected sort cannot be undone, or where its files would go.</summary>
     public string SelectionNote => Selected is not { } row ? ""
-        : JobTexts.WhyNotUndo(row.Job, row.Why) ?? $"Its files go back to the folder they came from ({row.From}, or where that folder is now). "
-            + "You see exactly where, and what will happen, before anything moves.";
+        : JobTexts.WhyNotUndo(row.Job, row.Why) ?? $"Its files return to their source folder ({row.From}, or where that folder is now). "
+            + "Before anything moves, the app shows you exactly where the files go and what will happen.";
 
     public string Status { get => _status; private set => Set(ref _status, value); }
 
@@ -131,7 +131,7 @@ public sealed class UndoListViewModel : ObservableObject
             Add(jobs, select, missing, startedFrom);
             Status = jobs.Count == 0 ? emptyText
                 : Rows.Count == before && select ? "Already in the list (selected)."
-                : $"{RunOutcome.Count(Rows.Count, "sort")} listed.";
+                : $"The list shows {RunOutcome.Count(Rows.Count, "sort")}.";
         }
         finally
         {
@@ -141,11 +141,11 @@ public sealed class UndoListViewModel : ObservableObject
 
     private async Task ChooseFolderAsync()
     {
-        string? folder = _dialogs.PickFolder("Choose a folder that was sorted (or the folder the files came from)", _lastFolder);
+        string? folder = _dialogs.PickFolder("Choose the source folder or the target folder of a sort", _lastFolder);
         if (folder is null) return;
         _lastFolder = folder;
-        Status = "Looking for sorts of " + folder + "...";
-        await AddAsync(() => JobCatalog.ForFolder(folder), select: true, $"No sorts found for {folder}.", startedFrom: folder);
+        Status = "Search in progress: sorts of " + folder + "...";
+        await AddAsync(() => JobCatalog.ForFolder(folder), select: true, $"The app found no sorts for {folder}.", startedFrom: folder);
     }
 
     private async Task OpenLogAsync()
@@ -183,7 +183,7 @@ public sealed class UndoListViewModel : ObservableObject
             return;
         }
         Add([job], select: true, startedFrom: file);
-        Status = job.Kind == JobKind.Undo ? "That is the log of an undo job, which can't be undone." : "Opened " + Path.GetFileName(file) + ".";
+        Status = job.Kind == JobKind.Undo ? "That is the log of an undo job. You cannot undo an undo job." : "The app opened " + Path.GetFileName(file) + ".";
     }
 
     private void Choose()

@@ -195,7 +195,7 @@ public static class BackupFactory
     public static string Create(BackupPlan plan)
     {
         if (!plan.CanRun)
-            throw new InvalidOperationException("This backup cannot be started: " + string.Join(" ", plan.Messages.Where(m => m.Level == MessageLevel.Error).Select(m => m.Text)));
+            throw new InvalidOperationException("You cannot start this backup: " + string.Join(" ", plan.Messages.Where(m => m.Level == MessageLevel.Error).Select(m => m.Text)));
 
         string id = JobFactory.NewJobId("backup");
         string created = JournalRecord.Now();
@@ -208,7 +208,7 @@ public static class BackupFactory
                 if (plan.IsTopUp) CheckStillTheEarlierBackup(t);
                 // The preview found the folder missing or empty; something may have been put there since.
                 else if (Directory.Exists(t.Folder) && Directory.EnumerateFileSystemEntries(t.Folder).Any())
-                    throw new IOException($"{t.Folder} is no longer empty. Scan again and choose another name or destination.");
+                    throw new IOException($"{t.Folder} is no longer empty. Check the card again. Then change the name or the folder for the backup drive.");
                 if (!Directory.Exists(t.Folder))
                 {
                     Directory.CreateDirectory(t.Folder);
@@ -244,14 +244,14 @@ public static class BackupFactory
     /// </summary>
     private static void CheckStillTheEarlierBackup(BackupTarget t)
     {
-        const string Again = "Scan again to see what can be added now.";
-        if (t.Earlier is not { } earlier) throw new IOException($"{t.Folder}: the earlier backup to add to is not known. {Again}");
-        if (!Directory.Exists(t.Folder)) throw new IOException($"{t.Folder} is not there any more. {Again}");
+        const string Again = "Check the card again to see what you can add now.";
+        if (t.Earlier is not { } earlier) throw new IOException($"{t.Folder}: there is no known earlier backup to add to. {Again}");
+        if (!Directory.Exists(t.Folder)) throw new IOException($"{t.Folder} is no longer there. {Again}");
         foreach (string journal in BackupPaths.FindJournals(t.Folder))
         {
             JobState state = JournalReader.Read(journal);
             if (state.IsBackup && !state.IsEnded)
-                throw new IOException($"{t.Folder} holds an unfinished backup now (started {state.Header.Created}). Resume or end it first.");
+                throw new IOException($"{t.Folder} now contains an unfinished backup (started {state.Header.Created}). Resume it or end it first.");
         }
         if (!File.Exists(earlier.Earlier.JournalPath) || !JournalReader.Read(earlier.Earlier.JournalPath).IsEnded)
             throw new IOException($"The log of the earlier backup is no longer in {t.Folder}. {Again}");
@@ -336,7 +336,7 @@ public static class BackupFactory
         foreach (SkippedFolder f in plan.Scan.SkippedFolders.Where(f => !BackupScanner.OsClutter.ContainsKey(Path.GetFileName(f.RelativePath))))
             writer.Write(new JournalRecord { Type = "held", Rel = f.RelativePath + "\\", Size = 0, Why = f.Reason }, flush: false);
         foreach (string problem in plan.Scan.Problems)
-            writer.Write(new JournalRecord { Type = "held", Rel = problem, Size = 0, Why = "folder could not be read - its files are not in the backup" }, flush: false);
+            writer.Write(new JournalRecord { Type = "held", Rel = problem, Size = 0, Why = "the scan could not read this folder, so its files are not in the backup" }, flush: false);
         writer.Write(new JournalRecord { Type = "ready", Count = plan.Files.Count, Bytes = plan.Bytes });
     }
 

@@ -192,7 +192,7 @@ function Test-CloseWithOriginalsKept([string] $Target) {
     $held = Start-Held @('run', '--source', $roSource, '--target', $Target, '--yes') 'after-copy-journal:1'
     try {
         try { Set-DenyDelete "$roSource\a" $true } finally { $r = Complete-Held $held }
-        if ($r.Code -ne 2 -or -not ($r.Output -match "Originals can't be removed")) { throw "expected a halt (exit 2), got exit $($r.Code): $($r.Output -join ' | ')" }
+        if ($r.Code -ne 2 -or -not ($r.Output -match 'The job cannot remove the originals')) { throw "expected a halt (exit 2), got exit $($r.Code): $($r.Output -join ' | ')" }
         $c = Invoke-Cli @('close', '--target', $Target)
         if ($c.Code -ne 1 -or -not ($c.Output -match '^Closed: ')) { throw "close did not end the job (exit $($c.Code)): $($c.Output -join ' | ')" }
     } finally { Set-DenyDelete "$roSource\a" $false }
@@ -250,7 +250,7 @@ function Test-OriginalGone([string] $Target, [string] $CrashAt, [string] $Comman
     if ($copies.Count -eq 0) { throw "the only copy of $rel was deleted ($Command, exit $($c.Code)): $($c.Output -join ' | ')" }
     if (@(Get-ChildItem -LiteralPath $Target -Recurse -Force -Filter '*.offload-partial').Count -ne 0) { throw 'a temporary file was left behind' }
     $summary = Get-Content (Get-ChildItem (Join-Path $Target "$logFolder\*.summary.txt")).FullName -Raw
-    $left = if ($summary -match '(?s)Left in the source \(\d.*?(\r?\n\r?\n|$)') { $Matches[0] } else { '' }   # that section only
+    $left = if ($summary -match '(?s)Left in the source folder \(\d.*?(\r?\n\r?\n|$)') { $Matches[0] } else { '' }   # that section only
     if ($left -match [regex]::Escape("    $rel  (")) { throw "the summary lists $rel as left in the source:`n$summary" }
     Reset-Folder $clips; Reset-Folder $Target
     "$rel kept as $($copies[0].Name) (exit $($c.Code))"
@@ -367,8 +367,8 @@ Scenario 'same drive: conflicts are skipped, never overwritten' {
     # 5: the different file (held back by the preview, with its clip's companions) is still (only) in the source.
     if ($r.Code -ne 5) { throw "exit $($r.Code): $($r.Output -join ' | ')" }
     $summary = Get-Content (Get-ChildItem (Join-Path $sameTarget "$logFolder\*.summary.txt")).FullName -Raw
-    if ($summary -notmatch 'identical copy already exists' -or ($summary + ($r.Output -join "`n")) -notmatch 'different file') { throw "summary does not explain the conflicts:`n$summary" }
-    if ($summary -notmatch 'Left in the source \(not part of this sort\)' -or $summary -match 'nothing that should have moved') { throw "summary does not list the files held back:`n$summary" }
+    if ($summary -notmatch 'identical copy is already in the target folder' -or ($summary + ($r.Output -join "`n")) -notmatch 'different file') { throw "summary does not explain the conflicts:`n$summary" }
+    if ($summary -notmatch 'Left in the source folder \(not part of this sort\)' -or $summary -match 'no files to move|none of the files that this sort planned to move') { throw "summary does not list the files held back:`n$summary" }
     # The clip's thumbnail and screennail in MISC\THM\100 belong to it, so they stay in the source with it.
     $heldWithClip = 'Stills\240101-Mavic2-Coast-2\MISC\THM\100\DJI_0004.THM', 'Stills\240101-Mavic2-Coast-2\MISC\THM\100\DJI_0004.SCR'
     Assert-Oracle $sameTarget 'videos' @{ ExpectKeptInSource = @($identical, $different) + $heldWithClip; PreexistingInTarget = @{ $identical = $shaIdentical; $different = $shaDifferent } }
@@ -434,7 +434,7 @@ Scenario 'same drive: an online-only clip keeps exit 5 and is in the summary' {
     if ($r.Code -ne 5) { throw "expected exit 5, got $($r.Code): $($r.Output -join ' | ')" }
     if (-not ($r.Output -match [regex]::Escape('STILL IN SOURCE b\C0004.MOV'))) { throw "the online-only clip is not named: $($r.Output -join ' | ')" }
     $s = Invoke-Cli @('status', '--target', $target)
-    if (-not ($s.Output -match 'Found in the source when it was checked again after the job') -or -not ($s.Output -match [regex]::Escape('b\C0004.MOV'))) {
+    if (-not ($s.Output -match 'In the source folder at the check after the job') -or -not ($s.Output -match [regex]::Escape('b\C0004.MOV'))) {
         throw "the summary does not list the online-only clip: $($s.Output -join ' | ')"
     }
     # "Verify again" speaks for the moved files, and checks the source again too: it never says all is well meanwhile.
@@ -485,7 +485,7 @@ Scenario 'same drive: a hard crash leaves the receipt in the source and the repo
     if (-not $r.Crashed) { throw 'crash point not reached' }
     if (-not (Test-Path -Path (Join-Path $src "$logFolder\*.moved-out.csv"))) { throw 'no receipt in the source after the crash' }
     $receipt = Get-Content (Get-ChildItem (Join-Path $src "$logFolder\*.moved-out.txt")).FullName -Raw
-    if ($receipt -notmatch 'The job is not finished yet') { throw "the receipt does not say the job is unfinished:`n$receipt" }
+    if ($receipt -notmatch 'The job is not finished') { throw "the receipt does not say the job is unfinished:`n$receipt" }
     foreach ($suffix in 'manifest.csv', 'summary.txt') { if (-not (Test-Path -Path (Join-Path $sameTarget "$logFolder\*.$suffix"))) { throw "no $suffix next to the log after the crash" } }
     $r = Invoke-Cli @('resume', '--target', $sameTarget)
     if ($r.Code -ne 0) { throw "resume failed (exit $($r.Code)): $($r.Output -join ' | ')" }

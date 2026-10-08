@@ -128,8 +128,8 @@ public partial class GuiLogicTests
         ResultView view = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForSort(job, NothingLeft));
 
         Assert.Equal(ResultTone.Good, view.Tone);
-        Assert.Equal("Done - 1 video (2 files) moved", view.Title);
-        Assert.Equal("Left in the source: nothing that should move", view.LeftLine);
+        Assert.Equal("Done: 1 video (2 files) moved", view.Title);
+        Assert.Equal("Left in the source folder: nothing that needs to move", view.LeftLine);
         Assert.Empty(view.Reasons);
         Assert.Null(view.Alarm);
         Assert.Equal("Finished.", view.Status);
@@ -147,19 +147,19 @@ public partial class GuiLogicTests
 
         Assert.True(Result(job, RunStatus.Completed).NothingLeftBehind); // the job alone would have said "all good"
         Assert.Equal(ResultTone.Attention, view.Tone);
-        Assert.Equal("Finished - 1 video is still in the source", view.Title);
-        Assert.StartsWith("Left in the source: 1 video (", view.LeftLine);
+        Assert.Equal("Finished: 1 video is still in the source folder", view.Title);
+        Assert.StartsWith("Left in the source folder: 1 video (", view.LeftLine);
         Assert.DoesNotContain(") (", view.LeftLine);
-        Assert.EndsWith(") - check before deleting or formatting anything.", view.LeftLine);
+        Assert.EndsWith("). Check this file before you delete or format anything.", view.LeftLine);
         Assert.Equal($"1 file: {SourceCheck.NotInThisSort}", Assert.Single(view.Reasons));
         Assert.Equal(1, check.MovableNow);
-        Assert.Contains("moves what can move now", view.Detail);
+        Assert.Contains("moves the files that can move now", view.Detail);
     }
 
     [Fact]
     public void Every_file_the_job_did_not_move_is_counted_once_with_its_real_reason()
     {
-        const string locked = """Opening the file failed for "E:\Card1\DCIM\E.MOV": The process cannot access the file because it is being used by another process. (error 32)""";
+        const string locked = """The open operation failed for "E:\Card1\DCIM\E.MOV": The process cannot access the file because it is being used by another process. (error 32)""";
         JobState job = Job(null!,
             Item(@"DCIM\A.MOV", ItemStage.Done),
             Item(@"DCIM\B.MOV", ItemStage.Skipped, SkipReasons.DifferentInTarget),
@@ -169,22 +169,22 @@ public partial class GuiLogicTests
         // The fresh scan sees B held back by the name clash, D as an identical copy (its verified copy is in the target) and E.
         SourceFile placed = File(@"DCIM\D.MOV");
         MovePlan rescan = Plan([placed, File(@"DCIM\E.MOV")], identical: [placed],
-            heldBack: [File(@"DCIM\B.MOV", note: FileNote.DifferentInTarget, reason: "a DIFFERENT file with the same name is already in the target - stays")]);
+            heldBack: [File(@"DCIM\B.MOV", note: FileNote.DifferentInTarget, reason: "stays: a DIFFERENT file with the same name is already in the target folder")]);
         SourceCheck check = SourceCheck.ForSort(job, rescan);
         ResultView view = RunOutcome.Describe(Result(job, RunStatus.CompletedWithFailures), job, check);
 
         Assert.Equal([@"DCIM\B.MOV", @"DCIM\D.MOV", @"DCIM\E.MOV"], check.Left.Select(f => f.Rel));
         Assert.Equal(1, check.MovableNow); // only E: D is an identical copy now, and B clashes
         Assert.Equal(ResultTone.Attention, view.Tone);
-        Assert.Equal("Not finished - 3 videos are still in the source", view.Title);
-        Assert.Contains("1 file: an identical copy was already in the target - skipped, nothing is missing", view.Reasons);
-        Assert.Contains("1 file: a DIFFERENT file with the same name is already in the target", view.Reasons);
-        Assert.Contains("1 file: verified copy is in the target; original kept", view.Reasons);
-        Assert.Contains("1 file: could not be moved: The process cannot access the file because it is being used by another process.", view.Reasons);
+        Assert.Equal("Not finished: 3 videos are still in the source folder", view.Title);
+        Assert.Contains("1 file: an identical copy was already in the target folder (skipped, nothing is missing)", view.Reasons);
+        Assert.Contains("1 file: a DIFFERENT file with the same name is already in the target folder", view.Reasons);
+        Assert.Contains("1 file: a checked copy is in the target folder, and the original is still in the source folder", view.Reasons);
+        Assert.Contains("1 file: could not move: The process cannot access the file because it is being used by another process.", view.Reasons);
         Assert.DoesNotContain(view.Reasons, r => r.Contains("for example", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains("press Resume", view.Detail);
+        Assert.Contains("click Resume", view.Detail);
         Assert.Equal("copied, original kept", check.Left.Single(f => f.Rel == @"DCIM\D.MOV").Status);
-        Assert.Contains("original could not be removed", check.Left.Single(f => f.Rel == @"DCIM\D.MOV").Detail);
+        Assert.Contains("could not delete the original", check.Left.Single(f => f.Rel == @"DCIM\D.MOV").Detail);
     }
 
     [Fact]
@@ -196,28 +196,28 @@ public partial class GuiLogicTests
         ResultView view = RunOutcome.Describe(Result(job, RunStatus.Closed), job, SourceCheck.ForSort(job, rescan));
 
         Assert.Equal(ResultTone.Attention, view.Tone);
-        Assert.Equal("Ended - 1 video (2 files) was not moved and is still in the source", view.Title);
-        Assert.Equal("2 files: not moved - the job was ended early", Assert.Single(view.Reasons));
-        Assert.Equal("The job was ended. Files that were not moved are still in the source.", view.Status);
+        Assert.Equal("Ended: 1 video (2 files) did not move and is still in the source folder", view.Title);
+        Assert.Equal("2 files: not moved because you ended the job early", Assert.Single(view.Reasons));
+        Assert.Equal("The job ended. The files that did not move are still in the source folder.", view.Status);
     }
 
     [Fact]
     public void A_halted_job_shows_the_engine_message_and_a_red_line_when_the_source_reads_differently()
     {
-        const string gone = @"The source (SONY_A was F:) is not connected or was renamed: F:\Shoot. Reconnect it and press Resume. Nothing was lost.";
+        const string gone = @"The source drive (SONY_A was F:) is not connected, or the source folder F:\Shoot has a new name. Connect the drive again. Then click Resume. Nothing was lost.";
         JobState job = Job(null!, Item(@"DCIM\A.MOV", ItemStage.Done), Item(@"DCIM\B.MOV", ItemStage.Pending));
         ResultView view = RunOutcome.Describe(Result(job, RunStatus.Halted, HaltReason.SourceNotConnected, gone), job, SourceCheck.ForJob(job));
 
         Assert.Equal(gone, view.Title);
         Assert.Equal(ResultTone.Attention, view.Tone);
         Assert.Null(view.Alarm);
-        Assert.Contains("not moved yet. Resume continues where it stopped.", view.LeftLine);
+        Assert.Contains("The job did not move this file yet. Resume continues from the point where the job stopped.", view.LeftLine);
 
-        ResultView inconsistent = RunOutcome.Describe(Result(job, RunStatus.Halted, HaltReason.SourceInconsistent, "The source drive is returning inconsistent data"), job, SourceCheck.ForJob(job));
-        Assert.StartsWith("Do NOT format or delete the source", inconsistent.Alarm);
+        ResultView inconsistent = RunOutcome.Describe(Result(job, RunStatus.Halted, HaltReason.SourceInconsistent, "The source drive gives inconsistent data"), job, SourceCheck.ForJob(job));
+        Assert.StartsWith("Do NOT format or delete the source folder:", inconsistent.Alarm);
 
-        ResultView readOnly = RunOutcome.Describe(Result(job, RunStatus.Halted, HaltReason.OriginalsNotRemovable, "Originals can't be removed"), job, SourceCheck.ForJob(job));
-        Assert.Contains("end the job without moving the rest", readOnly.Detail);
+        ResultView readOnly = RunOutcome.Describe(Result(job, RunStatus.Halted, HaltReason.OriginalsNotRemovable, "The job cannot remove the originals from the source folder"), job, SourceCheck.ForJob(job));
+        Assert.Contains("end the job and keep the remaining files where they are", readOnly.Detail);
     }
 
     [Fact]
@@ -226,9 +226,9 @@ public partial class GuiLogicTests
         JobState job = Job(null!, Item(@"DCIM\A.MOV", ItemStage.Done), Item(@"DCIM\B.MOV", ItemStage.Pending));
         ResultView view = RunOutcome.Describe(Result(job, RunStatus.Stopped), job, SourceCheck.ForJob(job));
 
-        Assert.Equal("Stopped - 1 video moved so far", view.Title);
-        Assert.Equal("It is now safe to unplug the drives. Resume continues where it stopped.", view.Detail);
-        Assert.Equal("Stopped. It is now safe to unplug the drives. Resume continues where it stopped.", view.Status);
+        Assert.Equal("Stopped: 1 video moved so far", view.Title);
+        Assert.Equal("It is now safe to disconnect the drives. Resume continues the job from the point where it stopped.", view.Detail);
+        Assert.Equal("Stopped. It is now safe to disconnect the drives. Resume continues the job from the point where it stopped.", view.Status);
         Assert.Equal(ResultTone.Attention, view.Tone);
     }
 
@@ -239,8 +239,8 @@ public partial class GuiLogicTests
         ResultView view = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForJob(job), checking: true);
 
         Assert.Equal(ResultTone.Checking, view.Tone);
-        Assert.Equal("Done - 1 video moved", view.Title);
-        Assert.Equal("Checking what is left in the source...", view.LeftLine);
+        Assert.Equal("Done: 1 video moved", view.Title);
+        Assert.Equal("The app now checks what is left in the source folder...", view.LeftLine);
 
         // Something already left behind is amber at once; there is nothing to wait for.
         JobState partial = Job("completed", Item(@"DCIM\A.MOV", ItemStage.Done), Item(@"DCIM\B.MOV", ItemStage.Skipped, SkipReasons.ChangedAfterPreview));
@@ -251,17 +251,17 @@ public partial class GuiLogicTests
     public void A_source_that_could_not_be_checked_again_is_never_green()
     {
         JobState job = Job("completed", Item(@"DCIM\A.MOV", ItemStage.Done));
-        ResultView view = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForSort(job, null, "the source folder can't be reached"));
+        ResultView view = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForSort(job, null, "the source folder is not available"));
 
         Assert.Equal(ResultTone.Attention, view.Tone);
-        Assert.Equal("Done - 1 video moved", view.Title);
-        Assert.Contains("could not be checked again (the source folder can't be reached)", view.LeftLine);
-        Assert.Equal("Finished. The source could not be checked again - see above.", view.Status);
+        Assert.Equal("Done: 1 video moved", view.Title);
+        Assert.Contains("could not check the source folder again (the source folder is not available)", view.LeftLine);
+        Assert.Equal("Finished. The app could not check the source folder again. For details, see above.", view.Status);
 
-        ResultView stopped = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForSort(job, null, "the check was stopped"));
+        ResultView stopped = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForSort(job, null, "the check stopped before the end"));
         Assert.Equal(ResultTone.Attention, stopped.Tone);
-        Assert.Equal("Finished. The source could not be checked again - see above.", stopped.Status);
-        Assert.DoesNotContain("not everything left", stopped.Status);
+        Assert.Equal("Finished. The app could not check the source folder again. For details, see above.", stopped.Status);
+        Assert.DoesNotContain("some files are still in", stopped.Status);
     }
 
     [Fact]
@@ -275,16 +275,16 @@ public partial class GuiLogicTests
 
         Assert.False(check.IsChecked);
         Assert.Equal(ResultTone.Attention, view.Tone);
-        Assert.Equal("Done - 1 video moved", view.Title); // never "Nothing that should move is left"
-        Assert.Equal(@"Left in the source: nothing that should move in the folders that could be read, but 2 folders could not be read (DCIM\101MEDIA, Private) - "
-            + "check them before deleting or formatting anything.", view.LeftLine);
-        Assert.Equal("Finished. Some folders in the source could not be read again - see above.", view.Status);
+        Assert.Equal("Done: 1 video moved", view.Title); // never "Nothing that should move is left"
+        Assert.Equal(@"Left in the source folder: nothing that needs to move in the folders that the app could read. But the scan could not read 2 folders (DCIM\101MEDIA, Private). "
+            + "Check them before you delete or format anything.", view.LeftLine);
+        Assert.Equal("Finished. The app could not read some folders in the source folder again. For details, see above.", view.Status);
 
         // With files left as well, the unread folders are named in the details.
         MovePlan more = Plan([File(@"DCIM\B.MOV")], unreadable: ["Private: Access to the path is denied."]);
         ResultView both = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForSort(job, more));
-        Assert.Equal("Finished - 1 video is still in the source", both.Title);
-        Assert.Contains("In the source, 1 folder could not be read (Private): what is in it was not checked.", both.Detail);
+        Assert.Equal("Finished: 1 video is still in the source folder", both.Title);
+        Assert.Contains("In the source folder, the scan could not read 1 folder (Private). The app did not check the files in this folder.", both.Detail);
     }
 
     [Fact]
@@ -296,8 +296,8 @@ public partial class GuiLogicTests
         ResultView view = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForSort(job, rescan));
 
         Assert.Equal(ResultTone.Good, view.Tone);
-        Assert.Equal("Left in the source: nothing that should move. 1 unrecognized file stays there - check before deleting or formatting anything.", view.LeftLine);
-        Assert.Equal("1 file: an identical copy was already in the target - skipped, nothing is missing", Assert.Single(view.Reasons));
+        Assert.Equal("Left in the source folder: nothing that needs to move. 1 unrecognized file stays there. Check it before you delete or format anything.", view.LeftLine);
+        Assert.Equal("1 file: an identical copy was already in the target folder (skipped, nothing is missing)", Assert.Single(view.Reasons));
     }
 
     [Fact]
@@ -306,22 +306,22 @@ public partial class GuiLogicTests
         JobState done = Job(JobKind.Undo, "completed", Item(@"DCIM\A.MOV", ItemStage.Done), Item(@"DCIM\B.MOV", ItemStage.Done));
         ResultView view = RunOutcome.Describe(Result(done, RunStatus.Completed), done, SourceCheck.ForJob(done));
         Assert.Equal(ResultTone.Good, view.Tone);
-        Assert.Equal(@"Undone - 2 videos are back in E:\Card1", view.Title);
-        Assert.Equal("Left in the sorted folder: nothing", view.LeftLine);
+        Assert.Equal(@"Undone: 2 videos are back in E:\Card1", view.Title);
+        Assert.Equal("Left in the target folder: nothing", view.LeftLine);
 
         JobState partly = Job(JobKind.Undo, "completed", Item(@"DCIM\A.MOV", ItemStage.Done), Item(@"DCIM\B.MOV", ItemStage.Skipped, SkipReasons.ChangedSinceSorted));
         ResultView changed = RunOutcome.Describe(Result(partly, RunStatus.Completed), partly, SourceCheck.ForJob(partly));
         Assert.Equal(ResultTone.Attention, changed.Tone);
-        Assert.Equal("Finished - 1 video was not moved back", changed.Title);
-        Assert.EndsWith(" - not moved back.", changed.LeftLine);
-        Assert.Equal("1 file: changed since the sort - left where it is", Assert.Single(changed.Reasons));
+        Assert.Equal("Finished: 1 video did not return", changed.Title);
+        Assert.EndsWith(". This file did not return.", changed.LeftLine);
+        Assert.Equal("1 file: changed after the sort (the undo does not move a changed file)", Assert.Single(changed.Reasons));
 
         // In an undo the engine reads the sorted folder twice: that is the folder not to format.
-        ResultView inconsistent = RunOutcome.Describe(Result(partly, RunStatus.Halted, HaltReason.SourceInconsistent, "The source drive is returning inconsistent data"),
+        ResultView inconsistent = RunOutcome.Describe(Result(partly, RunStatus.Halted, HaltReason.SourceInconsistent, "The source drive gives inconsistent data"),
             partly, SourceCheck.ForJob(partly));
-        Assert.StartsWith("Do NOT format or delete the sorted folder:", inconsistent.Alarm);
-        Assert.Equal("Show files still in the sorted folder", RunOutcome.ShowLeftText(undo: true));
-        Assert.Equal("Show files still in the source", RunOutcome.ShowLeftText(undo: false));
+        Assert.StartsWith("Do NOT format or delete the target folder:", inconsistent.Alarm);
+        Assert.Equal("Show files still in the target folder", RunOutcome.ShowLeftText(undo: true));
+        Assert.Equal("Show files still in the source folder", RunOutcome.ShowLeftText(undo: false));
     }
 
     [Fact]
@@ -337,7 +337,7 @@ public partial class GuiLogicTests
     }
 
     [Theory]
-    [InlineData("""Moving the file failed for "E:\a\b.mov": Access is denied. (error 5)""", "Access is denied.")]
+    [InlineData("""The move failed for "E:\a\b.mov": Access is denied. (error 5)""", "Access is denied.")]
     [InlineData("The process cannot access the file 'E:\\a\\b.mov' because it is being used by another process.",
         "The process cannot access the file because it is being used by another process.")]
     [InlineData(FailReasons.NotMovable, FailReasons.NotMovable)]
@@ -352,7 +352,7 @@ public partial class GuiLogicTests
         var intact = new VerifyResult(1, 1, []);
 
         ResultView verified = VerifyOutcome.Show(intact, amber);
-        Assert.Equal("Verified - the moved file is intact", verified.Title);
+        Assert.Equal("Checked again: the moved file is the same as before", verified.Title);
         Assert.Equal(ResultTone.Attention, verified.Tone); // the moved file is fine, but a video is still in the source
         Assert.Equal(amber.LeftLine, verified.LeftLine);
         Assert.Equal(amber.Reasons, verified.Reasons);
@@ -360,26 +360,26 @@ public partial class GuiLogicTests
 
         ResultView green = RunOutcome.Describe(Result(job, RunStatus.Completed), job, SourceCheck.ForSort(job, NothingLeft));
         Assert.Equal(ResultTone.Good, VerifyOutcome.Show(intact, green).Tone);
-        Assert.Equal("Left in the source: nothing that should move", VerifyOutcome.Show(intact, green).LeftLine);
+        Assert.Equal("Left in the source folder: nothing that needs to move", VerifyOutcome.Show(intact, green).LeftLine);
         Assert.Equal(ResultTone.Attention, VerifyOutcome.Show(new VerifyResult(1, 0, ["changed: x"]), green).Tone);
         Assert.Equal(ResultTone.Attention, VerifyOutcome.Show(intact, null).Tone); // nothing known about the source
 
         // Files that did not move are on the card already: the details do not list their paths again.
-        var notMoved = new VerifyResult(1, 1, [@"not moved (still in the source): E:\Card1\DCIM\B.MOV - skipped"]) { NotMoved = 1 };
+        var notMoved = new VerifyResult(1, 1, [@"not moved (still in the source folder): E:\Card1\DCIM\B.MOV - skipped"]) { NotMoved = 1 };
         ResultView partly = VerifyOutcome.Show(notMoved, amber);
-        Assert.Equal("Moved files are intact - 1 planned file is still in the source", partly.Title);
+        Assert.Equal("The moved files did not change, but 1 planned file is still in the source folder", partly.Title);
         Assert.DoesNotContain(@"E:\Card1", partly.Detail);
-        Assert.Equal("Moved files are intact - 1 planned file is still in the sorted folder", VerifyOutcome.Show(notMoved, amber, undo: true).Title);
+        Assert.Equal("The moved files did not change, but 1 planned file is still in the target folder", VerifyOutcome.Show(notMoved, amber, undo: true).Title);
         Assert.Contains(@"E:\Card1", VerifyOutcome.Show(notMoved, null).Detail); // with nothing else on the card, the list is the detail
     }
 
     [Fact]
     public void Verification_that_finds_unmoved_files_says_the_moved_ones_are_intact()
     {
-        (bool good, string title, _) = VerifyOutcome.Describe(new VerifyResult(3, 3, [@"not moved (still in the source): E:\x.mov - skipped"]) { NotMoved = 1 });
+        (bool good, string title, _) = VerifyOutcome.Describe(new VerifyResult(3, 3, [@"not moved (still in the source folder): E:\x.mov - skipped"]) { NotMoved = 1 });
         Assert.False(good);
-        Assert.Equal("Moved files are intact - 1 planned file is still in the source", title);
-        Assert.Equal("Verified - all 3 moved files are intact", VerifyOutcome.Describe(new VerifyResult(3, 3, [])).Title);
+        Assert.Equal("The moved files did not change, but 1 planned file is still in the source folder", title);
+        Assert.Equal("Checked again: all 3 moved files are the same as before", VerifyOutcome.Describe(new VerifyResult(3, 3, [])).Title);
     }
 
     // ---- Preview texts --------------------------------------------------------------------------------------------
@@ -405,7 +405,7 @@ public partial class GuiLogicTests
         Assert.Equal("Move the remaining 1 video (2 files)", PlanFacts.ConfirmText(plan, remaining: true));
         Assert.Equal("Move 2 videos", PlanFacts.ConfirmText(Plan([a, b])));
         Assert.Equal("Move 3 photos", PlanFacts.ConfirmText(Plan([.. Enumerable.Range(1, 3).Select(i => File($"P{i}.JPG", MediaSide.Photo))], mode: MoveMode.Photos)));
-        Assert.Equal(@"Moving videos to: D:\Sorted\Card1-Video", PlanFacts.Destination(plan));
+        Assert.Equal(@"The videos will move to: D:\Sorted\Card1-Video", PlanFacts.Destination(plan));
     }
 
     [Theory]
@@ -437,9 +437,9 @@ public partial class GuiLogicTests
 
         RunResult r = t.Run(plan);
         JobState job = JournalReader.Read(r.JournalPath);
-        Assert.Equal("Done - 3 videos (18 files) moved",
+        Assert.Equal("Done: 3 videos (18 files) moved",
             RunOutcome.Describe(r, job, SourceCheck.ForSort(job, Rescan(job))).Title);
-        Assert.StartsWith("Move 3 videos (18 files, ", JobTexts.UndoQuestion(UndoFactory.Preview(r.JournalPath)).Question);
+        Assert.StartsWith("Return 3 videos (18 files, ", JobTexts.UndoQuestion(UndoFactory.Preview(r.JournalPath)).Question);
     }
 
     [Fact]
@@ -452,14 +452,14 @@ public partial class GuiLogicTests
                 File(@"Edit\clip.mov", MediaSide.Neutral, FileRole.Other, FileNote.InProject), File("p.jpg", MediaSide.Photo)],
             identical: [identical],
             heldBack: [File(@"DCIM\D.MOV", note: FileNote.DifferentInTarget), File(@"DCIM\D.SRT", role: FileRole.Sidecar, note: FileNote.HeldWithGroup)],
-            skipped: [new SkippedFolder("Photos Library.photoslibrary", "application library - left untouched") { LibraryKind = "Apple Photos library" }]);
+            skipped: [new SkippedFolder("Photos Library.photoslibrary", "application library - not changed") { LibraryKind = "Apple Photos library" }]);
         Attention a = PlanFacts.Attention(plan);
 
         Assert.Equal(8, a.Files);
         Assert.Equal("8 files", a.CountText);
-        Assert.Equal("1 already in the target (skipped), 1 with a DIFFERENT file of the same name in the target, 1 staying with their clip, 1 of an unknown type (they stay), "
-            + "1 of an unknown type named like a video (they go with it), 1 matching both a photo and a video, 1 inside an editing project, "
-            + "1 too large for a Live Photo clip (treated as videos), 1 application library not scanned", a.Detail);
+        Assert.Equal("1 already in the target folder (skipped), 1 with a DIFFERENT file of the same name in the target folder, 1 that stays with its clip, "
+            + "1 of an unknown type (it stays), 1 of an unknown type named like a video (it moves with that video), 1 that matches both a photo and a video, "
+            + "1 inside an editing project, 1 too large for a Live Photo clip (it counts as a video), 1 application library not scanned", a.Detail);
         Assert.Equal("Nothing", PlanFacts.Attention(Plan([File("A.MOV")])).CountText);
     }
 
@@ -496,7 +496,7 @@ public partial class GuiLogicTests
         MovePlan plan = Planner.Build(scan, @"D:\offload-gui-test-does-not-exist\Out", MoveMode.Videos, verifyChecksums: true, env);
 
         Assert.True(PlanFacts.TargetHoldsOtherJobs(plan));
-        Assert.False(PlanFacts.TargetHoldsOtherJobs(Plan([File("A.MOV")], messages: [new PlanMessage(MessageLevel.Info, "This continues an earlier sort of this folder.")])));
+        Assert.False(PlanFacts.TargetHoldsOtherJobs(Plan([File("A.MOV")], messages: [new PlanMessage(MessageLevel.Info, "This sort continues an earlier sort of this folder.")])));
     }
 
     // ---- Banner, undo and the memory-card question ------------------------------------------------------------------
@@ -505,16 +505,16 @@ public partial class GuiLogicTests
     public void The_memory_card_question_says_to_back_the_card_up_first_and_offers_the_Backup_tab()
     {
         string question = JobTexts.MemoryCardQuestion("F: SONY_A");
-        Assert.Equal("This looks like a memory card or camera drive (F: SONY_A). Sort moves files around on it.\n\n"
-            + "Back the card up to another drive first, then sort the backup. "
-            + "Sort anyway only if you mean to sort the card itself - a camera that records to an SSD, for example.", question);
+        Assert.Equal("This looks like a memory card or camera drive (F: SONY_A). A sort moves files to different folders on it.\n\n"
+            + "Back up the card to a different drive first. Then sort the backup. "
+            + "Click “Sort anyway” only if you want to sort the card itself (for example, if your camera records to an SSD).", question);
         Assert.DoesNotContain("coming soon", question);
         Assert.Equal("Back up this card first", JobTexts.MemoryCardDontSort);
-        Assert.Contains("The Backup tab is open with the card selected", JobTexts.MemoryCardNotSorted);
+        Assert.Contains("The Backup tab is open, and the card is selected", JobTexts.MemoryCardNotSorted);
 
         string warning = SourceGuards.MemoryCardWarning("F: SONY_A");
         Assert.DoesNotContain("coming soon", warning);
-        Assert.EndsWith("Back the card up to another drive first (the Backup tab) and sort the backup.", warning);
+        Assert.EndsWith("First, use the Backup tab to back up the card to a different drive. Then sort the backup.", warning);
     }
 
     [Fact]
@@ -522,10 +522,10 @@ public partial class GuiLogicTests
     {
         var job = new RecentJob { JournalPath = @"Q:\x\_IngestSorter\j.journal.jsonl", JobId = "j", Source = @"F:\Shoot", Target = @"Q:\x", TargetLabel = "SONY_SSD" };
         (string title, string paths, string text) = JobTexts.Banner(job, more: 2);
-        Assert.Equal("Unfinished sort on SONY_SSD (not connected) - connect the drive to continue", title);
+        Assert.Equal("Unfinished sort on SONY_SSD (not connected). Connect the drive to continue the job.", title);
         Assert.StartsWith(@"F:\Shoot  →  Q:\x  ·  videos, started ", paths);
         Assert.Contains("(+2 more unfinished jobs", text);
-        Assert.Equal("Unfinished undo on Q: (not connected) - connect the drive to continue",
+        Assert.Equal("Unfinished undo on Q: (not connected). Connect the drive to continue the job.",
             JobTexts.Banner(new RecentJob { JournalPath = job.JournalPath, JobId = "u", Kind = JobKind.Undo, Target = @"Q:\x" }, 0).Title);
     }
 
@@ -534,9 +534,9 @@ public partial class GuiLogicTests
     {
         JobState job = Job(null!, Item(@"DCIM\A.MOV", ItemStage.Done), Item(@"DCIM\B.MOV", ItemStage.Pending));
         (string title, string paths, string text) = JobTexts.Banner(job, more: 0);
-        Assert.StartsWith("An unfinished sort was found: 1 of 2 files moved (videos), started ", title);
+        Assert.StartsWith("Unfinished sort: 1 of 2 files moved (videos), started ", title);
         Assert.Equal(@"E:\Card1  →  D:\Sorted\Card1-Video", paths);
-        Assert.Contains("“Stop here...” ends it and leaves the rest in the folder to sort", text);
+        Assert.Contains("“Stop here...” ends the job and keeps the remaining files in the source folder", text);
         Assert.DoesNotContain("more unfinished", text);
     }
 
@@ -551,15 +551,15 @@ public partial class GuiLogicTests
         preview.CannotGoBack.Add(new UndoIssue(sort.Items[4], SkipReasons.ChangedSinceSorted));
         (string question, string details) = JobTexts.UndoQuestion(preview);
 
-        Assert.StartsWith(@"Move 2 videos (3 files, ", question);
-        Assert.EndsWith(@") back to G:\Card1?", question);
-        Assert.Contains(@"has another letter now: they go back to G:\Card1 (it was E:\Card1).", details);
-        Assert.Contains(@"G:\Card1 no longer exists; it will be created (on the drive the files came from).", details);
-        Assert.Contains("2 files changed since the sort and will stay where they are.", details);
-        Assert.Contains("copied back and checked by SHA-256", details);
+        Assert.StartsWith(@"Return 2 videos (3 files, ", question);
+        Assert.EndsWith(@") to G:\Card1?", question);
+        Assert.Contains(@"has a different letter now. The files return to G:\Card1, not to E:\Card1.", details);
+        Assert.Contains(@"G:\Card1 does not exist now. The app will make this folder again on the drive that the files came from.", details);
+        Assert.Contains("2 files changed after the sort and will stay where they are.", details);
+        Assert.Contains("the app copies each file and checks the copy with SHA-256", details);
 
-        preview.Blocked = "This sort was already undone (undo job X, 26 Sep 2026 15:42).";
-        Assert.Equal(("This sort can't be undone right now.", preview.Blocked), JobTexts.UndoQuestion(preview));
+        preview.Blocked = "This sort is already undone (undo job X, 26 Sep 2026 15:42).";
+        Assert.Equal(("You cannot undo this sort now.", preview.Blocked), JobTexts.UndoQuestion(preview));
     }
 
     [Fact]
@@ -585,7 +585,7 @@ public partial class GuiLogicTests
         undone.UndoneBy = new UndoMark("u", "u.journal.jsonl", null, "completed");
         Assert.Equal("undone", JobTexts.ListingStatus(Listing(undone)));
         undone.UndoneBy = new UndoMark("u", "u.journal.jsonl", null, "closed");
-        Assert.Equal("partly undone - can undo the rest", JobTexts.ListingStatus(Listing(undone)));
+        Assert.Equal("partly undone (you can undo the rest)", JobTexts.ListingStatus(Listing(undone)));
     }
 
     // ---- With the real engine and a real rescan ----------------------------------------------------------------------
@@ -605,7 +605,7 @@ public partial class GuiLogicTests
 
         ResultView view = RunOutcome.Describe(r, job, SourceCheck.ForSort(job, Rescan(job)));
         Assert.Equal(ResultTone.Good, view.Tone);
-        Assert.Equal("Done - 1 video (2 files) moved", view.Title);
+        Assert.Equal("Done: 1 video (2 files) moved", view.Title);
 
         t.Add(@"card\DCIM\100MEDIA\DJI_0003.MOV");
         SourceCheck later = SourceCheck.ForSort(job, Rescan(job));
@@ -650,7 +650,7 @@ public partial class GuiLogicTests
             Assert.True(r.NothingLeftBehind); // the job moved all it knew about ...
             Assert.Equal("B", Assert.Single(check.Unreadable).Split(':')[0]);
             Assert.Equal(ResultTone.Attention, view.Tone); // ... but a folder of the source was never looked at
-            Assert.Contains("1 folder could not be read (B)", view.LeftLine);
+            Assert.Contains("the scan could not read 1 folder (B)", view.LeftLine);
         }
         finally
         {
@@ -677,7 +677,7 @@ public partial class GuiLogicTests
 
         Assert.Equal(RunStatus.CompletedWithFailures, r.Status);
         Assert.Equal(ResultTone.Attention, view.Tone);
-        Assert.Equal("Not finished - 1 video is still in the source", view.Title);
+        Assert.Equal("Not finished: 1 video is still in the source folder", view.Title);
         Assert.Equal(@"DCIM\B.MOV", Assert.Single(check.Left).Rel);
         Assert.Equal("failed", check.Left[0].Status);
     }

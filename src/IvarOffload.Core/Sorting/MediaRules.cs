@@ -55,7 +55,7 @@ public static partial class MediaRules
     public static readonly FrozenSet<string> AudioExtensions = Set(
         ".wav", ".bwf", ".rf64", ".w64", ".mp3", ".m4a", ".aac", ".aif", ".aiff", ".flac");
 
-    private const string UnmatchedAudioReason = "audio recording with no matching photo or video (recorder / dual-system sound)";
+    private const string UnmatchedAudioReason = "audio recording with no photo or video of the same name (recorder / dual-system sound)";
 
     /// <summary>
     /// Companion files. They follow the photo or video they belong to (matched by name). When no match is found,
@@ -123,7 +123,7 @@ public static partial class MediaRules
         [".Trashes"] = "macOS trash",
         [".Spotlight-V100"] = "macOS index",
         [".fseventsd"] = "macOS events",
-        [".TemporaryItems"] = "macOS temp",
+        [".TemporaryItems"] = "macOS temporary files",
         ["ascmhl"] = "ASC MHL checksum manifests",
         [Jobs.JobPaths.LogFolderName] = "IVAR Offload logs",
         [Jobs.JobPaths.IvarIngestLogFolderName] = "IVAR Offload logs (from IVAR Ingest)",

@@ -140,10 +140,10 @@
                                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
                                     <Button Content="{Binding PauseText}" AutomationProperties.AutomationId="PauseButton" Command="{Binding PauseCommand}" MinWidth="100" Height="34" Margin="0,0,8,0"
                                             Visibility="{Binding ShowPause, Converter={StaticResource VisibleWhen}}"
-                                            ToolTip="Pauses between steps. Do not unplug the drives while paused - press Stop first." />
+                                            ToolTip="Pauses the job between two steps. Do not disconnect the drives while the job is paused. To disconnect them, click Stop first." />
                                     <Button Content="Stop" Command="{Binding StopCommand}" AutomationProperties.AutomationId="StopButton" MinWidth="100" Height="34"
                                             Visibility="{Binding ShowStop, Converter={StaticResource VisibleWhen}}"
-                                            ToolTip="Stops safely: the file in progress is finished or rolled back. Then it is safe to unplug the drives, and the job can be resumed." />
+                                            ToolTip="Stops the job safely: the app finishes the file in progress or rolls it back. Then it is safe to disconnect the drives. You can resume the job later." />
                                     <Button Command="{Binding ConfirmCommand}" AutomationProperties.AutomationId="ConfirmButton" AutomationProperties.Name="Confirm move"
                                             Style="{StaticResource ModeButton}" MinWidth="230" Height="38"
                                             Visibility="{Binding ShowConfirm, Converter={StaticResource VisibleWhen}}">
@@ -207,13 +207,13 @@
                                             <DockPanel>
                                                 <Grid DockPanel.Dock="Left" Margin="0,2,14,0" VerticalAlignment="Top" Width="24">
                                                     <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="22" Foreground="{DynamicResource SystemFillColorSuccessBrush}"
-                                                               AutomationProperties.AutomationId="ResultGoodIcon" AutomationProperties.Name="Done, nothing left behind"
+                                                               AutomationProperties.AutomationId="ResultGoodIcon" AutomationProperties.Name="Done, nothing remains to move"
                                                                Visibility="{Binding ResultIsGood, Converter={StaticResource VisibleWhen}}" />
                                                     <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="22" Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                                                AutomationProperties.AutomationId="ResultWarningIcon" AutomationProperties.Name="Needs attention"
                                                                Visibility="{Binding ResultIsAttention, Converter={StaticResource VisibleWhen}}" />
                                                     <TextBlock Style="{StaticResource Icon}" Text="&#xE895;" FontSize="20" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                               AutomationProperties.AutomationId="ResultCheckingIcon" AutomationProperties.Name="Checking"
+                                                               AutomationProperties.AutomationId="ResultCheckingIcon" AutomationProperties.Name="Check in progress"
                                                                Visibility="{Binding ResultIsChecking, Converter={StaticResource VisibleWhen}}" />
                                                 </Grid>
                                                 <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -227,7 +227,7 @@
                                                         <Button Content="{Binding OpenTargetText}" Command="{Binding OpenTargetCommand}" AutomationProperties.AutomationId="OpenTargetButton" MinWidth="140" />
                                                         <Button Content="Undo this sort" Command="{Binding UndoLastCommand}" AutomationProperties.AutomationId="UndoButton" MinWidth="130"
                                                                 Visibility="{Binding CanUndoLastJob, Converter={StaticResource VisibleWhen}}"
-                                                                ToolTip="Moves the files of this sort back where they came from. You see what will happen before anything moves." />
+                                                                ToolTip="Returns the files of this sort to their source folder. Before anything moves, the app shows you what will happen." />
                                                         <Button Content="{Binding ShowStillInSourceText}" Command="{Binding ShowStillInSourceCommand}" AutomationProperties.AutomationId="ShowStillInSourceButton" MinWidth="200"
                                                                 Visibility="{Binding HasStillInSource, Converter={StaticResource VisibleWhen}}" />
                                                         <ToggleButton IsChecked="{Binding ShowMore}" Margin="0,4,8,0" Padding="12,5" AutomationProperties.AutomationId="MoreButton"
@@ -245,12 +245,12 @@
                                                             </Style>
                                                         </WrapPanel.Resources>
                                                         <Button Content="Check the moved files again" AutomationProperties.AutomationId="VerifyButton" Command="{Binding VerifyCommand}" MinWidth="170"
-                                                                ToolTip="Reads every moved file again and compares it with how it was when it moved" />
+                                                                ToolTip="Reads every moved file again and compares it with the record of the move in the job log." />
                                                         <Button Content="Open report" Command="{Binding OpenLogCommand}" AutomationProperties.AutomationId="OpenLogButton" MinWidth="110"
-                                                                ToolTip="The list of every file, where it went, and how it was checked" />
+                                                                ToolTip="Shows the list of every file, where it went and how the app checked it." />
                                                         <Button Content="{Binding RemoveEmptyText}" AutomationProperties.AutomationId="RemoveEmptyButton" Command="{Binding RemoveEmptyFoldersCommand}" MinWidth="200"
                                                                 Visibility="{Binding EmptyFolderCount, Converter={StaticResource VisibleWhen}}"
-                                                                ToolTip="Folders that only held moved files and are now completely empty. You are asked first." />
+                                                                ToolTip="Removes the folders that held only moved files and are now completely empty. The app asks you first." />
                                                     </WrapPanel>
                                                 </StackPanel>
                                                 <StackPanel>
@@ -329,13 +329,13 @@
                                                 <StackPanel>
                                                     <TextBlock Text="FROM" Style="{StaticResource SideLabel}" />
                                                     <DockPanel Margin="0,0,0,14">
-                                                        <local:InfoTip DockPanel.Dock="Right" AutomationProperties.Name="About the folder to sort"
-                                                                       Content="The folder with your card backup, e.g. E:\Backups\Card1. Nothing in it moves until you confirm." />
-                                                        <TextBlock Text="Folder to sort" Style="{StaticResource FieldTitle}" />
+                                                        <local:InfoTip DockPanel.Dock="Right" AutomationProperties.Name="About the source folder"
+                                                                       Content="This is the folder with your card backup, for example E:\Backups\Card1. Nothing in it moves until you confirm the move." />
+                                                        <TextBlock Text="Source folder" Style="{StaticResource FieldTitle}" />
                                                     </DockPanel>
                                                     <DockPanel>
                                                         <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseSourceCommand}" AutomationProperties.AutomationId="BrowseSource" MinWidth="100" />
-                                                        <TextBox Margin="0,0,8,0" AutomationProperties.AutomationId="SourceBox" AutomationProperties.Name="Folder to sort" VerticalContentAlignment="Center"
+                                                        <TextBox Margin="0,0,8,0" AutomationProperties.AutomationId="SourceBox" AutomationProperties.Name="Source folder" VerticalContentAlignment="Center"
                                                                  Text="{Binding SourcePath, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsEnabled="{Binding CanEditInputs}" />
                                                     </DockPanel>
                                                 </StackPanel>
@@ -357,13 +357,13 @@
                                                 <StackPanel>
                                                     <TextBlock Text="TO" Style="{StaticResource SideLabel}" />
                                                     <DockPanel Margin="0,0,0,14">
-                                                        <local:InfoTip DockPanel.Dock="Right" AutomationProperties.Name="About where they go"
-                                                                       Content="Where the videos (or photos) go. Their sub-folders are kept, so every file is easy to find. It can be a new folder, also one inside the folder to sort." />
-                                                        <TextBlock Text="Move them to" Style="{StaticResource FieldTitle}" />
+                                                        <local:InfoTip DockPanel.Dock="Right" AutomationProperties.Name="About the target folder"
+                                                                       Content="The videos (or photos) move to this folder. They keep their sub-folders, so every file is easy to find. The target folder can be a new folder. It can also be inside the source folder." />
+                                                        <TextBlock Text="Target folder" Style="{StaticResource FieldTitle}" />
                                                     </DockPanel>
                                                     <DockPanel>
                                                         <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseTargetCommand}" AutomationProperties.AutomationId="BrowseTarget" MinWidth="100" />
-                                                        <TextBox Margin="0,0,8,0" AutomationProperties.AutomationId="TargetBox" AutomationProperties.Name="Move them to" VerticalContentAlignment="Center"
+                                                        <TextBox Margin="0,0,8,0" AutomationProperties.AutomationId="TargetBox" AutomationProperties.Name="Target folder" VerticalContentAlignment="Center"
                                                                  Text="{Binding TargetPath, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsEnabled="{Binding CanEditInputs}" />
                                                     </DockPanel>
                                                 </StackPanel>
@@ -381,7 +381,7 @@
                                                     <CheckBox Content="Record checksums" IsChecked="{Binding VerifyChecksums}" IsEnabled="{Binding CanEditInputs}" VerticalAlignment="Center"
                                                               AutomationProperties.AutomationId="ChecksumBox" AutomationProperties.Name="Record checksums" />
                                                     <local:InfoTip Margin="2,0,0,0" AutomationProperties.Name="About checksums"
-                                                                   Content="Records a fingerprint of every file in the report, so you can later prove nothing changed (recommended). When files move between drives this is always done." />
+                                                                   Content="Recommended: the app records a checksum (a fingerprint) of every file in the report. Later, you can use the checksums to prove that nothing changed. When files move between drives, the app always records checksums." />
                                                 </StackPanel>
                                             </DockPanel>
                                         </Grid>
@@ -403,7 +403,7 @@
                                                 </StackPanel>
                                                 <DockPanel Grid.Column="2">
                                                     <Button DockPanel.Dock="Right" Content="{Binding ChangeSetupText}" Command="{Binding ChangeSetupCommand}" AutomationProperties.AutomationId="ChangeSetupButton" MinWidth="90" Margin="16,0,0,0"
-                                                            ToolTip="Change the folder, where they go, or what moves" />
+                                                            ToolTip="Change the source folder, the target folder or what moves." />
                                                     <TextBlock Text="{Binding TargetPath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
                                                                ToolTip="{Binding TargetPath}" />
                                                 </DockPanel>
@@ -484,7 +484,7 @@
                                 <Button HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,22,4" Padding="12,3" Click="MoreBelow_Click"
                                         Background="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}" BorderBrush="{DynamicResource SurfaceStrokeColorFlyoutBrush}"
                                         AutomationProperties.AutomationId="MoreBelowButton" AutomationProperties.Name="Show more below"
-                                        ToolTip="There is more above the lists - scroll down to read it">
+                                        ToolTip="There is more text above the lists. Scroll down to read it.">
                                     <Button.Visibility>
                                         <MultiBinding Converter="{StaticResource MoreBelow}">
                                             <Binding ElementName="UpperScroll" Path="VerticalOffset" />
@@ -525,9 +525,9 @@
                                             <DataGrid Style="{StaticResource Grid}" ItemsSource="{Binding FolderRows}" Margin="0,6,0,0">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="Source folder" Binding="{Binding Folder}" Width="*" MinWidth="200" ElementStyle="{StaticResource CellText}" />
-                                                    <DataGridTextColumn Header="Files moving" Binding="{Binding Moving, StringFormat=N0}" Width="Auto" ElementStyle="{StaticResource CellText}" />
-                                                    <DataGridTextColumn Header="Size moving" Binding="{Binding MovingSize}" SortMemberPath="MovingBytes" Width="Auto" ElementStyle="{StaticResource SizeCell}" />
-                                                    <DataGridTextColumn Header="Files staying" Binding="{Binding Staying, StringFormat=N0}" Width="Auto" ElementStyle="{StaticResource CellText}" />
+                                                    <DataGridTextColumn Header="Files to move" Binding="{Binding Moving, StringFormat=N0}" Width="Auto" ElementStyle="{StaticResource CellText}" />
+                                                    <DataGridTextColumn Header="Size to move" Binding="{Binding MovingSize}" SortMemberPath="MovingBytes" Width="Auto" ElementStyle="{StaticResource SizeCell}" />
+                                                    <DataGridTextColumn Header="Files that stay" Binding="{Binding Staying, StringFormat=N0}" Width="Auto" ElementStyle="{StaticResource CellText}" />
                                                     <DataGridTextColumn Header="Note" Binding="{Binding Note}" Width="Auto" MinWidth="80" ElementStyle="{StaticResource CellText}" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
@@ -564,7 +564,7 @@
                                         <TextBox Text="{Binding ListFilter, UpdateSourceTrigger=PropertyChanged, Delay=250}" VerticalAlignment="Center"
                                                  Width="{Binding ActualWidth, ElementName=ListsArea, Converter={StaticResource ShrinkingWidth}, ConverterParameter='700,110,220'}"
                                                  AutomationProperties.AutomationId="ListFilterBox" AutomationProperties.Name="Filter the list"
-                                                 ToolTip="Show only rows whose path, type, reason or note contains this text" />
+                                                 ToolTip="Type text here to show only the rows that contain it in the path, type, reason or note." />
                                         <CheckBox Content="Only files that need a look" IsChecked="{Binding AttentionOnly}" AutomationProperties.AutomationId="AttentionOnlyBox"
                                                   VerticalAlignment="Center" Margin="14,0,0,0" />
                                     </StackPanel>
@@ -579,7 +579,7 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Height="44">
                 <Button Style="{StaticResource QuietButton}" Command="{Binding UndoPreviousCommand}" Margin="0,0,8,0"
                         AutomationProperties.AutomationId="UndoPreviousButton" AutomationProperties.Name="Undo a previous sort..."
-                        ToolTip="Move the files of an earlier sort back where they came from"
+                        ToolTip="Returns the files of an earlier sort to their source folder."
                         Visibility="{Binding IsSortTab, Converter={StaticResource VisibleWhen}}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource Icon}" Text="&#xE7A7;" FontSize="14" />
@@ -593,14 +593,14 @@
                     <StackPanel>
                         <TextBlock Text="Backup" Style="{StaticResource PopupHeading}" />
                         <TextBlock Text="{x:Static local:BackupTexts.BackupDescription}" TextWrapping="Wrap" LineHeight="20" />
-                        <TextBlock Style="{StaticResource PopupStep}" Text="1.  Check card only reads the card. Nothing is copied until you start, and the card is never written to - it also works with the write-protect switch on." />
-                        <TextBlock Style="{StaticResource PopupStep}" Text="2.  Every file is copied, exactly as it is: all folders (empty ones too), hidden files and camera metadata, with their dates. Only folders Windows and macOS keep on every drive are left out." />
-                        <TextBlock Style="{StaticResource PopupStep}" Text="3.  The card is read once and written to every destination at the same time. Each copy is read back from its own drive and compared by SHA-256, and the card file is read a second time; only then does a copy count as verified. If one destination fails, the others go on." />
-                        <TextBlock Style="{StaticResource PopupStep}" Text="4.  ASC MHL checksum files are written into each backup folder, so Hedge, Silverstack or the ascmhl tool can check it independently." />
+                        <TextBlock Style="{StaticResource PopupStep}" Text="1.  Check card only reads the card. The app copies nothing until you start the backup. It never writes to the card, so the backup also works when the write-protect switch is on." />
+                        <TextBlock Style="{StaticResource PopupStep}" Text="2.  The app copies every file exactly as it is: all folders (also the empty ones), hidden files and camera metadata, with their dates. The only items that the app does not copy are the folders that Windows and macOS keep on every drive." />
+                        <TextBlock Style="{StaticResource PopupStep}" Text="3.  The app reads the card once and writes to all backup drives at the same time. Then it reads each copy again from its own drive and compares the SHA-256 checksums. It also reads the card file a second time. A copy counts as checked only after these steps. If one backup drive fails, the others continue." />
+                        <TextBlock Style="{StaticResource PopupStep}" Text="4.  The app writes ASC MHL checksum files into each backup folder, so that Hedge, Silverstack or the ascmhl tool can check the folder independently." />
                         <TextBlock Style="{StaticResource PopupStep}">
-                            <Run Text="5.  Nothing is ever overwritten. Every step is logged in each backup's" />
+                            <Run Text="5.  The app never overwrites a file. It records every step in the" />
                             <Run Text="{x:Static jobs:JobPaths.LogFolderName}" />
-                            <Run Text="folder, so a backup that is stopped, crashes, loses power or has a drive unplugged resumes exactly where it was." />
+                            <Run Text="folder of each backup folder. If a backup stops, crashes or loses power, or if a drive disconnects, you can resume it exactly from the last completed step." />
                         </TextBlock>
                     </StackPanel>
                 </local:InfoTip>
@@ -611,14 +611,14 @@
                     <StackPanel>
                         <TextBlock Text="Sort" Style="{StaticResource PopupHeading}" />
                         <TextBlock Text="{x:Static local:BackupTexts.SortDescription}" TextWrapping="Wrap" LineHeight="20" />
-                        <TextBlock Style="{StaticResource PopupStep}" Text="1.  Check folder only reads the folder. Nothing is moved until you confirm." />
-                        <TextBlock Style="{StaticResource PopupStep}" Text="2.  The preview lists every file that will move and why - including companion files such as DJI .LRF/.SRT, sidecars and XMP files - and everything that stays. Card folders (Sony PRIVATE, P2, XF, RED...) and CinemaDNG clips move as a whole." />
-                        <TextBlock Style="{StaticResource PopupStep}" Text="3.  Files keep their sub-folders: Shoot\DCIM\100MEDIA\DJI_0003.MOV goes to Target\Shoot\DCIM\100MEDIA\DJI_0003.MOV." />
-                        <TextBlock Style="{StaticResource PopupStep}" Text="4.  On the same drive files are renamed into place (their data is never rewritten). Between drives each file is copied and read back from disk, the original is read a second time, and only when both match by SHA-256 is the original removed." />
+                        <TextBlock Style="{StaticResource PopupStep}" Text="1.  Check folder only reads the folder. Nothing moves until you confirm the move." />
+                        <TextBlock Style="{StaticResource PopupStep}" Text="2.  The preview lists every file that will move, and why. This includes companion files, for example DJI .LRF/.SRT files, sidecars and XMP files. The preview also lists everything that stays. Card folders (Sony PRIVATE, P2, XF, RED and others) and CinemaDNG clips move as a whole." />
+                        <TextBlock Style="{StaticResource PopupStep}" Text="3.  Files keep their sub-folders: Shoot\DCIM\100MEDIA\DJI_0003.MOV moves to Target\Shoot\DCIM\100MEDIA\DJI_0003.MOV." />
+                        <TextBlock Style="{StaticResource PopupStep}" Text="4.  On the same drive, the app renames the files into their new place and never rewrites their data. Between drives, the app copies each file and reads the copy again from the disk. It also reads the original a second time. Only when both match by SHA-256 does the app remove the original." />
                         <TextBlock Style="{StaticResource PopupStep}">
-                            <Run Text="5.  Nothing is ever overwritten. Every step is logged in the target's" />
+                            <Run Text="5.  The app never overwrites a file. It records every step in the" />
                             <Run Text="{x:Static jobs:JobPaths.LogFolderName}" />
-                            <Run Text="folder and a receipt is left in the source, so a job that is stopped, crashes or loses power resumes exactly where it was - and any sort can be undone." />
+                            <Run Text="folder in the target folder. It also writes a receipt into the source folder. If a job stops, crashes or loses power, you can resume it exactly from the last completed step. You can also undo any sort." />
                         </TextBlock>
                     </StackPanel>
                 </local:InfoTip>

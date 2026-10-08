@@ -11,32 +11,34 @@ namespace IvarOffload.Core.Backup;
 /// </summary>
 public static class BackupReasons
 {
-    public const string NotCopiedEnded = "not copied - the backup was ended before this file was copied";
-    public const string ChangedOnCard = "changed on the card after the preview - not copied; start a new backup to copy it";
-    public const string GoneFromCard = "no longer on the card (removed after the preview) - not copied";
-    public const string ChangedWhileCopied = "The file changed on the card while it was being copied. The copy was removed; Resume copies it again.";
+    public const string NotCopiedEnded = "not copied: the backup ended before it copied this file";
+    public const string ChangedOnCard = "changed on the card after the preview, not copied. To copy it, start a new backup.";
+    public const string GoneFromCard = "gone from the card after the preview, not copied";
+    public const string ChangedWhileCopied = "The file changed on the card during the copy. The backup removed the copy. Resume copies the file again.";
     public const string CardReadTwiceDiffers =
-        "The card returned different data when this file was read twice. The copies were removed; Resume copies it again. Check the card, reader, cable or port.";
+        "The card returned different data in two reads of this file. The backup removed the copies. Resume copies the file again. Check the card, reader, cable or port.";
     public const string NameTakenInDestination =
-        "A file with this name appeared in the destination during the backup. It was not replaced - check it, then Resume.";
+        "A file with this name appeared in the backup folder during the backup. The backup did not replace it. Check that file. Then resume the backup.";
     public const string DifferentInDestination =
-        "The file in the destination does not match the card any more. It was not replaced - check the destination drive.";
+        "The file in the backup folder does not match the card now. The backup did not replace it. Check the backup drive.";
     public const string TooLargeForDestination =
-        "This file is 4 GB or larger and the destination drive (FAT32) cannot store files that big. Use an NTFS or exFAT drive.";
+        "This file is 4 GB or larger. The backup drive (FAT32) cannot store a file of this size. Use an NTFS or exFAT drive.";
     public const string StreamsNotSupported =
-        "This file carries extra hidden metadata (alternate data streams) that the destination drive cannot store. Use an NTFS drive.";
-    public const string CopyMismatchTwice = "The copy did not match the card twice (checksum mismatch) - check the destination drive.";
+        "This file has additional hidden metadata (alternate data streams) that the backup drive cannot store. Use an NTFS drive.";
+    public const string CopyMismatchTwice = "The copy did not match the card two times (checksum mismatch). Check the backup drive.";
     public const string DiffersFromOtherCopies =
-        "The card now returns different content for this file than when it was copied to another destination. The new copy was removed; "
-        + "check the card and the copies already made.";
+        "The card now returns different content for this file than at the time of its copy to a different backup drive. The backup removed the new copy. "
+        + "Check the card and the copies that the backup made before.";
 
     // Top-ups (adding a card's new files to its earlier backup).
+    // NotCheckedEnded, KeptGone, the Aside* and Kept* texts below and CardErrorPrefix are frozen: old logs hold them, and the
+    // code compares what a log says with them (EarlierBackups.EarlierFiles, BackupRunner.ResultOf, MoveAside, CardFileProblem).
     public const string NotCheckedEnded =
         "not read again - the backup was ended before this file was checked (it is still in the backup folder, as the earlier backup verified it)";
     public const string KeptGone = "no longer on the card, and no longer in this backup folder (moved out by a sort, or deleted)";
     public const string CardDiffersFromBackup =
-        "The card returned other data for this file than the earlier backup verified (same size and date), and different data again when it "
-        + "was read a second time. The copy in the backup was kept; check the card, reader, cable or port, then Resume.";
+        "For this file, the card returned data that is different from the data that the earlier backup checked (same size and date). "
+        + "A second read returned different data again. The backup kept the copy in the backup folder. Check the card, reader, cable or port. Then resume the backup.";
     /// <summary>Why a file in the backup folder was moved into _IVAROffload\replaced (the card's version is copied in its place).</summary>
     public const string AsideChanged = "changed on the card since the earlier backup - this is the older version";
     public const string AsideDamaged = "no longer matched the checksum the earlier backup verified - damaged since";
@@ -48,10 +50,10 @@ public static class BackupReasons
     public const string KeptDiffers =
         "no longer on the card, and the copy here no longer matches its checksum (same size and date, read alike twice - damaged on this drive since the earlier backup?) - left as it is";
     public const string KeptReadDiffers =
-        "no longer on the card, and the copy here read differently twice - check this drive, its cable or port, then Resume";
+        "no longer on the card, and two reads of the copy here gave different data. Check this drive, its cable or port. Then resume the backup.";
 
     private const string CardErrorPrefix ="the card stopped responding while this file was being read (";
-    private const string DestinationErrorPrefix = "the destination stopped responding while this file was being written (";
+    private const string DestinationErrorPrefix = "the backup drive did not respond when the backup wrote this file (";
 
     public static string CardError(string detail) => $"{CardErrorPrefix}{detail})";
 
@@ -89,22 +91,26 @@ public static class BackupReports
         IReadOnlyList<string> all = destinations ?? h.Targets;
         if (all.Count > 1) sb.AppendLine($"All copies:   {string.Join(" | ", all)}");
         sb.AppendLine($"Started:      {h.Created} on {h.Machine} ({h.Tool})");
-        if (h.AddsTo is not null) sb.AppendLine($"Adds to:      backup {h.AddsTo} in this folder (this backup adds the card's new files to it and reads every file of the card again; the Status line says how far it got)");
+        if (h.AddsTo is not null)
+            sb.AppendLine($"Adds to:      backup {h.AddsTo} in this folder. This backup adds the new files of the card to it and reads all files of the card again. "
+                + "The Status line shows how much of this work is complete.");
         sb.AppendLine($"Status:       {Status(state)}");
         List<JobItem> card = state.Items.Where(i => i.Why != BackupWhy.Kept).ToList();
         List<JobItem> kept = state.Items.Where(i => i.Why == BackupWhy.Kept).ToList();
         List<JobItem> done = card.Where(i => i.Stage == ItemStage.Done).ToList();
-        sb.AppendLine($"Verified:     {done.Count:N0} of {card.Count:N0} files ({Format.Bytes(done.Sum(i => i.Size))} of {Format.Bytes(card.Sum(i => i.Size))})"
-            + " - each copy read back from this drive and compared by SHA-256" + (h.Reread ? ", and each card file read twice." : "."));
+        sb.AppendLine($"Checked:      {done.Count:N0} of {card.Count:N0} files ({Format.Bytes(done.Sum(i => i.Size))} of {Format.Bytes(card.Sum(i => i.Size))}). "
+            + "IVAR Offload read each copy back from this drive and compared it by SHA-256" + (h.Reread ? ". It also read each file on the card two times." : "."));
         if (h.AddsTo is not null)
         {
             int copied = done.Count(i => i.How == "copy"), again = done.Count(i => i.How == "verify");
-            sb.AppendLine($"              {copied:N0} copied now; {again:N0} already in the backup, read again from the card and from the copy (both matched the earlier checksum).");
+            sb.AppendLine($"              {copied:N0} copied now. {again:N0} already in the backup: for these, IVAR Offload read the card and the copy again, "
+                + "and both matched the earlier checksum.");
         }
         if (state.Mhl is not null) sb.AppendLine($"ASC MHL:      {state.Mhl}");
         if (state.MhlRestarted is not null && state.Mhl is not null)
-            sb.AppendLine($"              a new ASC MHL history was started: the earlier one lists files that changed or are gone since (an ASC MHL history can't record that). It was moved to {state.MhlRestarted}.");
-        if (state.MhlSkipped is not null) sb.AppendLine($"ASC MHL:      not written - {state.MhlSkipped}");
+            sb.AppendLine($"              IVAR Offload started a new ASC MHL history. The earlier history lists files that changed or are gone after that time, "
+                + $"and an ASC MHL history cannot record that. IVAR Offload moved the earlier history to {state.MhlRestarted}.");
+        if (state.MhlSkipped is not null) sb.AppendLine($"ASC MHL:      not written, because {state.MhlSkipped}");
         var failed = state.Items.Where(i => i.Failed && !i.IsFinished).ToList();
         var notCopied = card.Where(i => i.Stage == ItemStage.Skipped).ToList();
         var pending = card.Where(i => !i.IsFinished && !i.Failed).ToList();
@@ -112,7 +118,7 @@ public static class BackupReports
         if (failed.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine($"Failed ({failed.Count:N0}) - Resume tries them again:");
+            sb.AppendLine($"Failed ({failed.Count:N0}). Resume tries these files again:");
             foreach (JobItem i in failed) sb.AppendLine($"  {i.Rel}  -  {i.Note}");
         }
         if (notCopied.Count > 0)
@@ -129,34 +135,35 @@ public static class BackupReports
         if (aside.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine($"Moved aside ({aside.Count:N0}) - the files that were in the backup folder under these names, kept (never overwritten or deleted):");
+            sb.AppendLine($"Moved aside ({aside.Count:N0}). These files were in the backup folder with these names. IVAR Offload kept them "
+                + "and never overwrote or deleted them:");
             foreach (JobItem i in aside) sb.AppendLine($"  {i.Rel}  ->  {i.SetAside}  -  {i.SetAsideWhy}");
         }
         if (kept.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine($"No longer on the card ({kept.Count:N0}) - files of the earlier backup, kept in it:");
+            sb.AppendLine($"No longer on the card ({kept.Count:N0}). These files of the earlier backup stay in it:");
             foreach (JobItem i in kept)
-                sb.AppendLine($"  {i.Rel}  -  {(i.Stage == ItemStage.Done ? "still in the backup, verified" : i.Note ?? (i.Failed ? "failed" : "not checked yet"))}");
+                sb.AppendLine($"  {i.Rel}  -  {(i.Stage == ItemStage.Done ? "still in the backup, checked" : i.Note ?? (i.Failed ? "failed" : "not checked yet"))}");
         }
         if (state.HeldBack.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine($"Left out of the backup ({state.HeldBack.Count:N0}):");
+            sb.AppendLine($"Not in the backup ({state.HeldBack.Count:N0}):");
             foreach (HeldFile f in state.HeldBack) sb.AppendLine($"  {f.Rel}  -  {f.Why}");
         }
         sb.AppendLine();
-        sb.AppendLine("The card was only read, never written to. A verified backup is not a reason to format the card by itself: "
-            + "keep it until the footage is safe in at least two places you trust.");
+        sb.AppendLine("IVAR Offload only read the card and never wrote to it. A checked backup alone is not a reason to format the card. "
+            + "Keep the card until the footage is safe in two or more places that you trust.");
         return sb.ToString();
     }
 
     private static string Status(JobState state) => state.End?.What switch
     {
-        "completed" when state.Items.All(i => i.Why == BackupWhy.Kept || i.Stage == ItemStage.Done) && state.HeldBack.Count == 0 => "finished - every file copied and verified",
-        "completed" => "finished - some files were not copied (see below)",
-        "closed" => "ended early - not every file was copied",
-        _ => state.Items.Any(i => i.Stage != ItemStage.Pending || i.Failed) ? "unfinished - press Resume to continue" : "not started",
+        "completed" when state.Items.All(i => i.Why == BackupWhy.Kept || i.Stage == ItemStage.Done) && state.HeldBack.Count == 0 => "finished - every file copied and checked",
+        "completed" => "finished - some files not copied (see below)",
+        "closed" => "ended early - some files not copied",
+        _ => state.Items.Any(i => i.Stage != ItemStage.Pending || i.Failed) ? "unfinished. To continue, resume the backup." : "not started",
     };
 
     private static string Manifest(JobState state)
@@ -234,7 +241,7 @@ public static class BackupVerifier
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or JournalException)
             {
-                results.Add(new BackupVerifyDestination(folder, drive, 0, 0, [], File.Exists(journal) ? e.Message : $"{drive} is not connected (or the backup folder was renamed): {folder}"));
+                results.Add(new BackupVerifyDestination(folder, drive, 0, 0, [], File.Exists(journal) ? e.Message : $"{drive} is not connected, or the backup folder has a different name now: {folder}"));
                 done += first.Items.Count;
                 continue;
             }
@@ -251,13 +258,13 @@ public static class BackupVerifier
                     string besidePath = Path.Join(folder, item.SetAside);
                     try
                     {
-                        if (SafeFile.TrySnapshot(besidePath) is not { IsDirectory: false } b) problems.Add($"{item.SetAside}: missing from the destination");
+                        if (SafeFile.TrySnapshot(besidePath) is not { IsDirectory: false } b) problems.Add($"{item.SetAside}: missing from the backup folder");
                         else if (b.Size != beside.Size || SafeFile.ToHex(SafeFile.HashFile(besidePath, b.Size, null, ct)) != beside.Sha256)
-                            problems.Add($"{item.SetAside}: CHECKSUM MISMATCH - the copy is damaged");
+                            problems.Add($"{item.SetAside}: CHECKSUM MISMATCH (the copy is damaged)");
                     }
                     catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                     {
-                        problems.Add($"{item.SetAside}: could not be read ({e.Message})");
+                        problems.Add($"{item.SetAside}: read error ({e.Message})");
                     }
                 }
                 if (item.Stage != ItemStage.Done && item.Why == BackupWhy.Kept && item.IsFinished)
@@ -267,7 +274,7 @@ public static class BackupVerifier
                 }
                 if (item.Stage != ItemStage.Done)
                 {
-                    problems.Add($"{item.Rel}: no verified copy on this destination ({item.Note ?? "not copied yet"})");
+                    problems.Add($"{item.Rel}: no checked copy on this backup drive ({item.Note ?? "not copied yet"})");
                     continue;
                 }
                 checkedCount++;
@@ -277,16 +284,16 @@ public static class BackupVerifier
                     if (SafeFile.TrySnapshot(path) is not { IsDirectory: false } s)
                     {
                         if (sorted.Contains(item.Rel)) movedOut++; // "Sort this backup" moved it on; the sort's receipt says where
-                        else problems.Add($"{item.Rel}: missing from the destination");
+                        else problems.Add($"{item.Rel}: missing from the backup folder");
                     }
                     else if ((state.Mhl is not null || item.Why == BackupWhy.Chain) && IsUpdatedChain(item.Rel)) matched++; // the backup (or the one it added to) added its ASC MHL generation to it
-                    else if (s.Size != item.Size) problems.Add($"{item.Rel}: size changed ({s.Size:N0} bytes, the card's was {item.Size:N0})");
-                    else if (SafeFile.ToHex(SafeFile.HashFile(path, s.Size, null, ct)) != item.Sha256) problems.Add($"{item.Rel}: CHECKSUM MISMATCH - the copy is damaged");
+                    else if (s.Size != item.Size) problems.Add($"{item.Rel}: size changed ({s.Size:N0} bytes, but {item.Size:N0} bytes on the card)");
+                    else if (SafeFile.ToHex(SafeFile.HashFile(path, s.Size, null, ct)) != item.Sha256) problems.Add($"{item.Rel}: CHECKSUM MISMATCH (the copy is damaged)");
                     else matched++;
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {
-                    problems.Add($"{item.Rel}: could not be read ({e.Message})");
+                    problems.Add($"{item.Rel}: read error ({e.Message})");
                 }
             }
             results.Add(new BackupVerifyDestination(folder, drive, checkedCount - movedOut, matched, problems, null, movedOut, notKept));

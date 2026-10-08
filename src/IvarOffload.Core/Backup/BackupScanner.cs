@@ -59,7 +59,7 @@ public static class BackupScanner
         var sw = Stopwatch.StartNew();
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceRoot));
         if (Path.GetPathRoot(root) is { } driveRoot && root.Length < driveRoot.Length) root = driveRoot; // "F:" -> "F:\"
-        if (!Directory.Exists(root)) throw new DirectoryNotFoundException($"Folder not found: {root}");
+        if (!Directory.Exists(root)) throw new DirectoryNotFoundException($"The folder {root} does not exist.");
 
         var files = new List<SourceFile>();
         var folders = new Dictionary<string, FolderTimes>(StringComparer.OrdinalIgnoreCase);
@@ -99,7 +99,7 @@ public static class BackupScanner
                         long mtime = file.LastWriteTimeUtc.ToFileTimeUtc();
                         if ((file.Attributes & OnlineOnlyAttributes) != 0)
                             leftOut.Add(new LeftOutFile(entryRel, file.Length, mtime,
-                                "online-only cloud placeholder (not downloaded) - not copied; make it available offline, then back up again"));
+                                "online-only cloud placeholder (not downloaded) - not copied. To copy a placeholder, make it available offline. Then back up again."));
                         else if (file.Attributes.HasFlag(FileAttributes.ReparsePoint))
                             leftOut.Add(new LeftOutFile(entryRel, file.Length, mtime, "link / shortcut - not followed, not copied"));
                         else

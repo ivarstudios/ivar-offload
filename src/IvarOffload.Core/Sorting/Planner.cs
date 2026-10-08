@@ -128,7 +128,7 @@ public static partial class Planner
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            messages.Add(new PlanMessage(MessageLevel.Error, $"Cannot read the source drive: {e.Message}"));
+            messages.Add(new PlanMessage(MessageLevel.Error, $"IVAR Offload cannot read the drive of the source folder: {e.Message}"));
         }
         string? suggestedSource = CheckSource(source, sourceVolume, mode, env, messages, out string? memoryCard);
         bool sourceRefused = messages.Any(m => m.Level == MessageLevel.Error);
@@ -142,10 +142,10 @@ public static partial class Planner
         if (targetError is null && TargetInsideSource(source, target, env.RealPathOf) is { } inside)
         {
             if (scan.Files.Any(f => IsInside(f.RelativePath, inside)))
-                targetError = "The target folder is inside the source folder, but it was scanned as part of the source. Scan again.";
+                targetError = "The target folder is inside the source folder, but the scan included it in the source folder. Scan again.";
             else
                 messages.Add(new PlanMessage(MessageLevel.Info,
-                    $"The target folder is inside the source folder ({inside}). It is left out of the scan, so nothing in it is sorted again."));
+                    $"The target folder is inside the source folder ({inside}). The scan skips it, so the sort does not include the files in it."));
         }
         if (targetError is not null)
             messages.Add(new PlanMessage(MessageLevel.Error, targetError));
@@ -157,7 +157,7 @@ public static partial class Planner
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                messages.Add(new PlanMessage(MessageLevel.Error, $"Cannot read the target drive: {e.Message}"));
+                messages.Add(new PlanMessage(MessageLevel.Error, $"IVAR Offload cannot read the drive of the target folder: {e.Message}"));
             }
 
             FindConflicts(toMove, target, targetVolume, identical, different);
@@ -169,11 +169,12 @@ public static partial class Planner
                 method = sourceVolume.IsSameVolume(targetVolume) ? TransferMethod.Rename : TransferMethod.Copy;
                 if (method == TransferMethod.Rename)
                     messages.Add(new PlanMessage(MessageLevel.Info,
-                        $"Same drive ({sourceVolume.DisplayName}, {sourceVolume.FileSystem}): files are moved by renaming them. No file data is copied or rewritten."
-                        + (verifyChecksums ? " A SHA-256 checksum of every file is recorded in the log before it moves." : "")));
+                        $"Same drive ({sourceVolume.DisplayName}, {sourceVolume.FileSystem}): the sort moves each file with a rename. It does not copy any file data or write it again."
+                        + (verifyChecksums ? " The job log records a SHA-256 checksum of each file before that file moves." : "")));
                 else
                     messages.Add(new PlanMessage(MessageLevel.Info,
-                        $"Different drives ({sourceVolume.DisplayName} to {targetVolume.DisplayName}): every file is copied, read back from disk and compared by SHA-256, and only then is the original deleted."));
+                        $"Different drives ({sourceVolume.DisplayName} to {targetVolume.DisplayName}): the sort copies each file. Then it reads the copy again from the disk "
+                        + "and compares the SHA-256 checksums. Only after that does it delete the original."));
                 var identicalSet = new HashSet<SourceFile>(identical);
                 messages.AddRange(CheckTarget(targetVolume, env.ClusterSizeOf(targetVolume.Root),
                     toMove.Where(f => !identicalSet.Contains(f)).ToList(), copying: method == TransferMethod.Copy));
@@ -187,26 +188,29 @@ public static partial class Planner
         var movingSideStaying = scan.Files.Where(f => f.Side == MediaSide.Neutral && f.NaturalSide == side).ToList();
         if (toMove.Count == 0 && held.Count == 0)
             messages.Add(movingSideStaying.Count == 0
-                ? new PlanMessage(MessageLevel.Info, $"No {Word(mode)} found in the source folder - nothing to move.")
-                : new PlanMessage(MessageLevel.Warning, $"No {Word(mode)} can be moved - nothing to move. "
-                    + $"Still in the source: {Count(movingSideStaying.Count, mode)} ({StayReasons(movingSideStaying)})."));
+                ? new PlanMessage(MessageLevel.Info, $"The source folder has no {Word(mode)}, so there is nothing to move.")
+                : new PlanMessage(MessageLevel.Warning, $"None of the {Word(mode)} can move, so there is nothing to move. "
+                    + $"The source folder still holds {Count(movingSideStaying.Count, mode)} ({StayReasons(movingSideStaying)})."));
         if (identical.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Info,
-                $"{identical.Count:N0} {(identical.Count == 1 ? "file is" : "files are")} already in the target (same name, size and date) and will be skipped."));
+                $"{identical.Count:N0} {(identical.Count == 1 ? "file is" : "files are")} already in the target folder (same name, size and date). "
+                + $"The sort will skip {(identical.Count == 1 ? "it" : "them")}."));
         if (different.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{different.Count:N0} file(s) have the same name as DIFFERENT files already in the target (probably another card with restarted numbering). "
-                + $"They stay in the source together with their companions ({held.Count:N0} files in all). Sort each card into its own folder."));
+                $"{different.Count:N0} file(s) have the same name as DIFFERENT files that are already in the target folder (probably from another card that started its file numbers again). "
+                + $"They stay in the source folder together with their companion files ({held.Count:N0} files in all). Sort each card into its own folder."));
 
         string? sourceSync = env.SyncOf(source);
         if (sourceSync is not null)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"The source folder is synchronized by {sourceSync}. Moving files out of it looks like a deletion to the sync tool, so they will also disappear from the other devices that share this folder."));
+                $"The source folder is synchronized with {sourceSync}. The sync tool sees each file that moves out of the folder as a deletion. "
+                + "The files will then also disappear from the other devices that share this folder."));
         if (targetError is null)
         {
             string? targetSync = env.SyncOf(target);
             if (targetSync is not null && targetSync != sourceSync)
-                messages.Add(new PlanMessage(MessageLevel.Info, $"The target folder is synchronized by {targetSync}; moved files will be synced from there."));
+                messages.Add(new PlanMessage(MessageLevel.Info,
+                    $"The target folder is synchronized with {targetSync}. The sync tool will also synchronize the moved files from there."));
         }
 
         var moving = new HashSet<SourceFile>(toMove);
@@ -256,7 +260,7 @@ public static partial class Planner
         }
         if (Path.GetPathRoot(target) is not { Length: > 0 } root || !Directory.Exists(root))
             return $"The drive for the target folder ({Path.GetPathRoot(target)}) does not exist.";
-        if (File.Exists(target)) return "The target path is a file, not a folder.";
+        if (File.Exists(target)) return "The path that you entered for the target folder is a file, not a folder.";
         // Also compared where the paths really lead: a junction, a subst or mapped drive letter can name the same folder.
         string realSource = realPath(source), realTarget = realPath(target);
         if (string.Equals(source, target, StringComparison.OrdinalIgnoreCase) || string.Equals(realSource, realTarget, StringComparison.OrdinalIgnoreCase))
@@ -330,8 +334,10 @@ public static partial class Planner
         if (SourceGuards.CheckBroad(suggested, volume, env.SystemFolders, mode) is { Level: MessageLevel.Error })
             suggested = null;
         messages.Add(new PlanMessage(MessageLevel.Error,
-            $"You picked a folder inside a video card structure (...\\{Path.GetFileName(structure.StructureRoot)}). Choose the folder that holds the whole card instead"
-            + (suggested is null ? " (copy the card into a folder of its own first)." : $": {suggested}.")));
+            $"You selected a folder inside a video card structure (...\\{Path.GetFileName(structure.StructureRoot)})."
+            + (suggested is null
+                ? " Copy the card into a folder of its own. Then choose that folder as the source folder."
+                : $" Choose the folder that holds the whole card instead: {suggested}.")));
         return suggested;
     }
 
@@ -363,19 +369,19 @@ public static partial class Planner
         var messages = new List<PlanMessage>();
         if (target.IsReadOnly)
             messages.Add(new PlanMessage(MessageLevel.Error,
-                $"The target drive {target.DisplayNameWithLabel} is read-only. Choose a folder on a drive that can be written to."));
+                $"The drive {target.DisplayNameWithLabel} is read-only. Choose a folder on a drive that you can write to."));
         if (!copying) return messages;
 
         var tooLarge = toCopy.Where(f => f.Size > target.MaxFileSize).OrderByDescending(f => f.Size).ToList();
         if (tooLarge.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Error,
-                $"The target drive {target.DisplayNameWithLabel} is {target.FileSystem}, which cannot store files of 4 GB or more: "
-                + $"{tooLarge.Count:N0} file(s) (e.g. {tooLarge[0].Name}, {Format.Bytes(tooLarge[0].Size)}). Choose an NTFS or exFAT drive."));
+                $"The drive {target.DisplayNameWithLabel} is {target.FileSystem}, which cannot store files of 4 GB or more. "
+                + $"{tooLarge.Count:N0} file(s) are this large (for example {tooLarge[0].Name}, {Format.Bytes(tooLarge[0].Size)}). Choose an NTFS or exFAT drive."));
 
         long needed = toCopy.Sum(f => Allocated(f.Size, clusterSize));
         if (needed + FreeSpaceMargin > target.FreeBytes)
             messages.Add(new PlanMessage(MessageLevel.Error,
-                $"Not enough free space on {target.DisplayName}: {Format.Bytes(needed)} needed, {Format.Bytes(target.FreeBytes)} available."));
+                $"Not enough free space on {target.DisplayName}: the files need {Format.Bytes(needed)}, and the drive has {Format.Bytes(target.FreeBytes)} free."));
         return messages;
     }
 
@@ -423,12 +429,12 @@ public static partial class Planner
             if (clashing.Contains(f))
             {
                 f.Note = FileNote.DifferentInTarget;
-                f.Reason = "a DIFFERENT file with the same name is already in the target - stays";
+                f.Reason = "stays: a DIFFERENT file with the same name is already in the target folder";
             }
             else
             {
                 f.Note = FileNote.HeldWithGroup;
-                f.Reason = $"stays with {clashIn[GroupOf(f)].Name}: a DIFFERENT file with that name is already in the target";
+                f.Reason = $"stays with {clashIn[GroupOf(f)].Name}: a DIFFERENT file with that name is already in the target folder";
             }
         }
         var heldSet = new HashSet<SourceFile>(held);
@@ -471,13 +477,13 @@ public static partial class Planner
             JobHeader latest = others[0];
             int more = others.Count - 1;
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"This target already holds files sorted from {latest.Source}{On(latest.Created)} ({Word(latest.Mode)})"
-                + (more > 0 ? $", and from {more:N0} other earlier sort{(more == 1 ? "" : "s")}." : ".")));
+                $"This target folder already holds files that an earlier sort moved from {latest.Source}{On(latest.Created)} ({Word(latest.Mode)})"
+                + (more > 0 ? $", and files from {more:N0} other earlier sort{(more == 1 ? "" : "s")}." : ".")));
         }
         else
         {
             string? created = headers.Select(h => h.Created).Max(StringComparer.Ordinal);
-            messages.Add(new PlanMessage(MessageLevel.Info, $"This continues an earlier sort of this folder{On(created)}."));
+            messages.Add(new PlanMessage(MessageLevel.Info, $"This sort continues an earlier sort of this folder{On(created)}."));
         }
     }
 

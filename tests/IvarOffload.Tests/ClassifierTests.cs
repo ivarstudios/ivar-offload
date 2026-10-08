@@ -613,7 +613,7 @@ public class ClassifierTests
         SourceFile frame = r[@"M3\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0017.JPG"];
         Assert.Equal((MediaSide.Photo, FileNote.HyperlapseFrame), (frame.Side, frame.Note));
         Assert.Equal(@"M3\DCIM\HYPERLAPSE\HYPERLAPSE_0005", frame.GroupKey); // the frames of one hyperlapse stay together
-        Assert.Equal("photo (.JPG), a source frame of the DJI hyperlapse HYPERLAPSE_0005 (30 frames) - kept with its folder", frame.Reason);
+        Assert.Equal("photo (.JPG), a still frame of the DJI hyperlapse HYPERLAPSE_0005 (30 frames) - stays together with its folder", frame.Reason);
         Assert.Equal(frame.GroupKey, r[@"M3\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0001.xmp"].GroupKey);
         Assert.Equal(FileNote.None, r[@"M3\DCIM\100MEDIA\HYPERLAPSE_0001.JPG"].Note);
         Assert.Equal(@"M3\DCIM\100MEDIA\DJI_0001", r[@"M3\DCIM\100MEDIA\DJI_0001.JPG"].GroupKey);
@@ -647,7 +647,7 @@ public class ClassifierTests
         Assert.Equal((MediaSide.Video, MediaSide.Neutral), (r[@"Card1\C0000.MP4"].Side, r[@"Card1\C0000.MP4"].NaturalSide));
         SourceFile offline = r[@"Card1\C0003.MP4"];
         Assert.Equal((MediaSide.Neutral, FileNote.OnlineOnly, MediaSide.Video), (offline.Side, offline.Note, offline.NaturalSide));
-        Assert.Equal("online-only cloud placeholder (video, not downloaded) - stays; make it available offline to move it", offline.Reason);
+        Assert.Equal("online-only cloud placeholder (video, not downloaded) - stays. To move it, make it available offline.", offline.Reason);
         Assert.Equal(MediaSide.Photo, r[@"Card1\DSC_1.JPG"].NaturalSide);
         Assert.Equal(MediaSide.Neutral, r[@"Card1\notes.txt"].NaturalSide);
         Assert.Equal(MediaSide.Video, r[@"Card1\PRIVATE\M4ROOT\CLIP\C0009M01.XML"].NaturalSide);
@@ -671,7 +671,7 @@ public class ClassifierTests
 
         SourceFile maybe = r[@"Phone\IMG_0501.MOV"];
         Assert.Equal((MediaSide.Neutral, FileNote.OnlineOnly, MediaSide.Neutral), (maybe.Side, maybe.Note, maybe.NaturalSide));
-        Assert.Equal("online-only cloud placeholder (a Live Photo clip or a video - it is not downloaded, so it cannot be told) - stays; make it available offline to sort it",
+        Assert.Equal("online-only cloud placeholder (Live Photo clip or video: unknown until you download it) - stays. To sort it, make it available offline.",
             maybe.Reason);
         Assert.Equal(MediaSide.Neutral, r[@"Phone\IMG_0503.MP4"].NaturalSide); // its still is on the disk
         Assert.Equal(MediaSide.Photo, r[@"Phone\IMG_0501.HEIC"].NaturalSide);
@@ -754,7 +754,7 @@ public class ClassifierTests
         Assert.Equal(@"d\notes.txt", r[@"d\notes.txt"].GroupKey);
         Assert.Equal("m", r[@"m\x.JPG"].GroupKey);
         Assert.Equal("m", r[@"m\PPKRAW.bin"].GroupKey);
-        Assert.Contains("x_Timestamp.MRK found", r[@"m\PPKRAW.bin"].Reason);
+        Assert.Contains("(the folder has x_Timestamp.MRK)", r[@"m\PPKRAW.bin"].Reason);
     }
 
     [Fact]
@@ -972,15 +972,15 @@ public class ScannerAndPlannerTests
         MovePlan plan = t.Plan();
         Assert.Equal(new[] { @"real\clip.MOV" }, plan.ToMove.Select(f => f.RelativePath));
         Assert.Contains(plan.Scan.SkippedFolders, s => s.RelativePath == "Photos Library.photoslibrary" && s.LibraryKind == "Apple Photos library");
-        Assert.Contains(plan.Scan.SkippedFolders, s => s.RelativePath == @"Lightroom\Wedding Smart Previews.lrdata" && s.Reason == "application library - left untouched");
-        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Info && m.Text.Contains("left untouched (not scanned)") && m.Text.Contains("Final Cut Pro library"));
-        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("Wedding.lrcat") && m.Text.Contains("relink"));
+        Assert.Contains(plan.Scan.SkippedFolders, s => s.RelativePath == @"Lightroom\Wedding Smart Previews.lrdata" && s.Reason == "application library - not changed");
+        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Info && m.Text.Contains("does not scan or change") && m.Text.Contains("Final Cut Pro library"));
+        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("Wedding.lrcat") && m.Text.Contains("Relink"));
         Assert.Contains(plan.Scan.SkippedFolders, s => s.RelativePath == "Photo Booth Library" && s.LibraryKind == "Photo Booth library");
         // A Luminar catalog is known by the catalog file in its folder; nothing in or below that folder is in the scan.
         Assert.Contains(plan.Scan.SkippedFolders, s => s.RelativePath == "Luminar Neo Catalog" && s.LibraryKind == "Luminar catalog");
         Assert.DoesNotContain(plan.Scan.Files, f => f.RelativePath.StartsWith("Luminar", StringComparison.Ordinal));
         Assert.DoesNotContain(plan.Scan.Folders.Keys, k => k.StartsWith("Luminar", StringComparison.Ordinal));
-        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("Luminar Neo Catalog") && m.Text.Contains("relink"));
+        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("Luminar Neo Catalog") && m.Text.Contains("Relink"));
     }
 
     [Fact]
@@ -993,7 +993,7 @@ public class ScannerAndPlannerTests
         MovePlan plan = t.Plan();
         Assert.Equal(new[] { @"Photos\2025-09 Wedding\C0001.MP4" }, plan.ToMove.Select(f => f.RelativePath));
         Assert.DoesNotContain(plan.Scan.SkippedFolders, s => s.LibraryKind is not null);
-        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("Main.luminarneo") && m.Text.Contains("relink"));
+        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("Main.luminarneo") && m.Text.Contains("Relink"));
     }
 
     [Fact]

@@ -19,7 +19,7 @@ public partial class App : Application
     private static void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         // File operations are journaled step by step, so an unexpected error never leaves a job in an unknown state.
-        MessageBox.Show($"Unexpected error: {e.Exception.Message}\n\nAny job in progress can be resumed from its log.",
+        MessageBox.Show($"Unexpected error: {e.Exception.Message}\n\nYou can resume any job in progress from its job log.",
             WpfDialogs.Caption, MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }

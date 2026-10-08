@@ -53,7 +53,7 @@ public class SafetyTests
         // Changed deliberately: the drive is still there (only the folder went away), so the message says that
         // instead of "not connected".
         Assert.StartsWith($"The source folder is missing: {t.Source}. Its drive (", halted.Message);
-        Assert.Contains("is connected, so the folder was probably renamed, moved or deleted", halted.Message);
+        Assert.Contains("is connected, so someone probably renamed, moved or deleted the folder", halted.Message);
         Assert.DoesNotContain("not connected", halted.Message);
         Assert.Equal(0, halted.Skipped);
         Assert.Equal(0, Lines(t.Journal, "skip"));
@@ -106,7 +106,7 @@ public class SafetyTests
         Assert.Equal(0, result.Skipped);
         Assert.Equal(2, result.Failed);
         Assert.Equal(3, result.Moved);
-        Assert.All(JournalReader.Read(t.Journal).Items.Where(i => i.Failed), i => Assert.Contains("is missing - was it renamed or disconnected?", i.Note));
+        Assert.All(JournalReader.Read(t.Journal).Items.Where(i => i.Failed), i => Assert.Contains("is missing. Did someone rename it or disconnect its drive?", i.Note));
 
         MoveFolder(Path.Join(t.Source, "b-renamed"), Path.Join(t.Source, "b"));
         Assert.Equal(RunStatus.Completed, TestTree.Resume(t.Journal).Status);
@@ -195,7 +195,7 @@ public class SafetyTests
         RunResult halted = Run(AsCopy(t.Plan()), new RunOptions { Faults = gone });
         Assert.Equal(RunStatus.Halted, halted.Status);
         Assert.Equal(HaltReason.DriveStoppedResponding, halted.Halt);
-        Assert.Contains("stopped responding", halted.Message);
+        Assert.Contains("did not respond", halted.Message);
         Assert.Equal(0, halted.Skipped);
         Assert.Empty(Directory.EnumerateFiles(t.Target, "*" + JobPaths.TempExtension, SearchOption.AllDirectories));
 
@@ -276,8 +276,8 @@ public class SafetyTests
         RunResult halted = TestTree.Resume(t.Journal);
         Assert.Equal(RunStatus.Halted, halted.Status);
         Assert.Equal(HaltReason.LogMoved, halted.Halt);
-        Assert.Contains("has another letter now", halted.Message);
-        Assert.Contains($"Give the drive its old letter {OnMissingDrive(t.Target)[..2]} back", halted.Message);
+        Assert.Contains("has a different letter now", halted.Message);
+        Assert.Contains($"give the drive its old letter ({OnMissingDrive(t.Target)[..2]}) again", halted.Message);
         Assert.Equal(0, Lines(t.Journal, "skip") + Lines(t.Journal, "fail"));
 
         RewriteHeader(t.Journal, h =>
@@ -305,7 +305,7 @@ public class SafetyTests
         bool paused = false;
         var pauseAtStart = new SyncProgress<RunProgress>(p =>
         {
-            if (paused || p.Phase != "Checking") return;
+            if (paused || p.Phase != "File check in progress") return;
             paused = true;
             gate.Pause(); // the user presses Pause as the file starts (its checksum is being taken)...
             Task.Run(() =>
@@ -445,10 +445,10 @@ public class SafetyTests
             Assert.Equal(0, halted.Moved);
             if (copy)
             {
-                Assert.Contains("2 verified copies are in the target", halted.Message);
+                Assert.Contains("2 checked copies are in the target folder", halted.Message);
                 Assert.Equal(2, JournalReader.Read(t.Journal).Items.Count(i => i.Failed && i.Stage == ItemStage.Placed));
             }
-            else Assert.Contains("can't be moved", halted.Message);
+            else Assert.Contains("cannot move files out of the source folder", halted.Message);
             Assert.All(locked, f => Assert.True(File.Exists(f)));
         }
         finally
@@ -508,7 +508,7 @@ public class SafetyTests
                 Assert.True(File.Exists(Path.Join(t.Target, item.Rel)), "the verified copy stays in the target");
             }
             Assert.All(locked, f => Assert.True(File.Exists(f)));
-            Assert.Contains("2 of them also have a verified copy in the target", JobReports.Summary(state));
+            Assert.Contains("2 of them also have a checked copy in the target folder", JobReports.Summary(state));
         }
         finally
         {
@@ -555,7 +555,7 @@ public class SafetyTests
         JobState state = JournalReader.Read(t.Journal);
         Assert.Equal(1, Lines(t.Journal, "setaside"));
         Assert.Equal(placed.Rel + JobPaths.DamagedCopySuffix, state.Items[placed.Index].SetAside);
-        Assert.Contains("Damaged copies set aside", JobReports.Summary(state));
+        Assert.Contains("Damaged copies with a different name in the target folder", JobReports.Summary(state));
     }
 
     [Fact]
@@ -799,9 +799,16 @@ public class SafetyTests
         Assert.Equal(4, result.Matched);
         Assert.Equal(1, result.NotMoved);
         string problem = Assert.Single(result.Problems);
-        Assert.StartsWith("not moved (still in the source): ", problem);
+        Assert.StartsWith("not moved (still in the source folder): ", problem);
         Assert.Contains(videos[0], problem);
         Assert.Contains(SkipReasons.ChangedAfterPreview, problem);
+
+        // A log written by an earlier version holds the earlier words of the same reason: the summary uses today's words.
+        const string earlierWords = "the source file changed after the preview (left in place)";
+        File.WriteAllText(t.Journal, File.ReadAllText(t.Journal).Replace(SkipReasons.ChangedAfterPreview, earlierWords));
+        JobState earlier = JournalReader.Read(t.Journal);
+        Assert.Equal(earlierWords, earlier.Items.Single(i => i.Stage == ItemStage.Skipped).Note);
+        Assert.Contains($"skipped x1: {SkipReasons.ChangedAfterPreview}", JobReports.Summary(earlier));
     }
 
     [Fact]

@@ -40,7 +40,7 @@ public static class Scanner
     {
         var sw = Stopwatch.StartNew();
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceRoot));
-        if (!System.IO.Directory.Exists(root)) throw new DirectoryNotFoundException($"Source folder not found: {root}");
+        if (!System.IO.Directory.Exists(root)) throw new DirectoryNotFoundException($"The source folder does not exist: {root}");
         string? targetRel = null;
         try
         {
@@ -79,7 +79,7 @@ public static class Scanner
                         else if (MediaRules.ExcludedFolders.TryGetValue(dir.Name, out string? why))
                             skipped.Add(new SkippedFolder(entryRel, why));
                         else if (MediaRules.ApplicationLibraryKind(dir.Name) is { } library)
-                            skipped.Add(new SkippedFolder(entryRel, "application library - left untouched") { LibraryKind = library });
+                            skipped.Add(new SkippedFolder(entryRel, "application library - not changed") { LibraryKind = library });
                         else if (dir.Attributes.HasFlag(FileAttributes.ReparsePoint))
                             skipped.Add(new SkippedFolder(entryRel, "link or junction - not followed"));
                         else
@@ -115,7 +115,7 @@ public static class Scanner
                 foreach (string sub in subfolders) folders.Remove(sub);
                 subfolders.Clear();
                 skipped.RemoveRange(firstSkipped, skipped.Count - firstSkipped);
-                skipped.Add(new SkippedFolder(rel, "application library - left untouched") { LibraryKind = MediaRules.LuminarCatalogKind });
+                skipped.Add(new SkippedFolder(rel, "application library - not changed") { LibraryKind = MediaRules.LuminarCatalogKind });
             }
 
             // Depth-first in name order keeps the plan in a natural, stable order.

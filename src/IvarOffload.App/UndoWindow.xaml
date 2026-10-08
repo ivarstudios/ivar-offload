@@ -10,7 +10,7 @@
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
             <TextBlock Text="Undo a previous sort" FontSize="20" FontWeight="SemiBold" />
             <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,0"
-                       Text="Pick a sort to move its files back where they came from. The list shows the sorts this PC remembers; to find others, choose the folder that was sorted, or open its job log or the receipt left in the folder the files came from." />
+                       Text="Select a sort to return its files to their source folder. The list shows the sorts that this PC remembers. To find other sorts, choose the source folder or the target folder of the sort. You can also open the job log of the sort, or the receipt in its source folder." />
         </StackPanel>
 
         <DockPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
@@ -25,7 +25,7 @@
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
             <Button Content="Choose a folder..." Command="{Binding ChooseFolderCommand}" AutomationProperties.AutomationId="UndoChooseFolderButton" MinWidth="150" Margin="0,0,8,0" />
             <Button Content="Open a log file..." Command="{Binding OpenLogCommand}" AutomationProperties.AutomationId="UndoOpenLogButton" MinWidth="150" Margin="0,0,16,0"
-                    ToolTip="A job log (.journal.jsonl) from the sorted folder's log folder, or a receipt (.moved-out) from the folder the files came from" />
+                    ToolTip="Opens a job log (.journal.jsonl) from the log folder in the target folder, or a receipt (.moved-out) from the source folder." />
             <ProgressBar IsIndeterminate="True" Width="60" Height="4" Margin="0,0,10,0" Visibility="{Binding IsBusy, Converter={StaticResource VisibleWhen}}" />
             <TextBlock Text="{Binding Status}" Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
         </DockPanel>

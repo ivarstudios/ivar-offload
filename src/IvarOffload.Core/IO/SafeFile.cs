@@ -121,7 +121,7 @@ public static unsafe class SafeFile
         {
             int err = Marshal.GetLastPInvokeError();
             if (err is ERROR_FILE_NOT_FOUND or ERROR_PATH_NOT_FOUND) return null;
-            throw new Win32IOException(err, "Reading file information", path);
+            throw new Win32IOException(err, "The read of the file information", path);
         }
         return Snapshot(h, path);
     }
@@ -203,9 +203,9 @@ public static unsafe class SafeFile
         FILE_STANDARD_INFO standard;
         FILE_ID_INFO id;
         if (!GetFileInformationByHandleEx(h, FileBasicInfo, &basic, (uint)sizeof(FILE_BASIC_INFO)))
-            throw new Win32IOException(Marshal.GetLastPInvokeError(), "Reading file times", path);
+            throw new Win32IOException(Marshal.GetLastPInvokeError(), "The read of the file times", path);
         if (!GetFileInformationByHandleEx(h, FileStandardInfo, &standard, (uint)sizeof(FILE_STANDARD_INFO)))
-            throw new Win32IOException(Marshal.GetLastPInvokeError(), "Reading file size", path);
+            throw new Win32IOException(Marshal.GetLastPInvokeError(), "The read of the file size", path);
         string? fileId = GetFileInformationByHandleEx(h, FileIdInfo, &id, (uint)sizeof(FILE_ID_INFO))
             ? $"{id.VolumeSerialNumber:x16}-{id.FileIdHigh:x16}{id.FileIdLow:x16}"
             : null;
@@ -232,7 +232,7 @@ public static unsafe class SafeFile
         }
         int err = Marshal.GetLastPInvokeError();
         h.Dispose();
-        if (err is not (ERROR_ACCESS_DENIED or ERROR_WRITE_PROTECT)) throw new Win32IOException(err, "Opening", path);
+        if (err is not (ERROR_ACCESS_DENIED or ERROR_WRITE_PROTECT)) throw new Win32IOException(err, "The open operation", path);
 
         // No permission to suspend access-time updates (a read-only share or a write-protected drive): read anyway.
         h = CreateFile(p, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, flags, 0);
@@ -240,7 +240,7 @@ public static unsafe class SafeFile
         {
             err = Marshal.GetLastPInvokeError();
             h.Dispose();
-            throw new Win32IOException(err, "Opening", path);
+            throw new Win32IOException(err, "The open operation", path);
         }
         return h;
     }
@@ -276,7 +276,7 @@ public static unsafe class SafeFile
         {
             int err = Marshal.GetLastPInvokeError();
             if (err is ERROR_HANDLE_EOF or ERROR_INVALID_PARAMETER or ERROR_NOT_SUPPORTED or ERROR_INVALID_FUNCTION) return result;
-            throw new Win32IOException(err, "Listing data streams", path);
+            throw new Win32IOException(err, "The search for data streams", path);
         }
         try
         {
@@ -286,7 +286,7 @@ public static unsafe class SafeFile
                 if (!name.Equals("::$DATA", StringComparison.OrdinalIgnoreCase)) result.Add(new NamedStream(name, data.StreamSize));
                 if (FindNextStream(find, &data)) continue;
                 int err = Marshal.GetLastPInvokeError();
-                if (err != ERROR_HANDLE_EOF) throw new Win32IOException(err, "Listing data streams", path);
+                if (err != ERROR_HANDLE_EOF) throw new Win32IOException(err, "The search for data streams", path);
                 return result;
             }
         }
@@ -305,7 +305,7 @@ public static unsafe class SafeFile
         string destination = ToExtendedPath(destinationFile) + stream.Name;
         using SafeFileHandle source = OpenReadExtended(ToExtendedPath(sourceFile) + stream.Name, sourceFile + stream.Name, unbuffered: false);
         using SafeFileHandle dest = CreateFile(destination, GENERIC_WRITE, 0, 0, CREATE_NEW, 0, 0);
-        if (dest.IsInvalid) throw new Win32IOException(Marshal.GetLastPInvokeError(), "Creating data stream", destinationFile + stream.Name);
+        if (dest.IsInvalid) throw new Win32IOException(Marshal.GetLastPInvokeError(), "The write of the data stream", destinationFile + stream.Name);
         using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         byte[] buffer = new byte[1024 * 1024];
         long offset = 0;
@@ -318,9 +318,9 @@ public static unsafe class SafeFile
             offset += n;
         }
         if (offset != stream.Size)
-            throw new IOException($"Copied {offset:N0} bytes of data stream {stream.Name} but it should be {stream.Size:N0} bytes; it may have changed.");
+            throw new IOException($"The copy of data stream {stream.Name} has {offset:N0} bytes, but the expected size is {stream.Size:N0} bytes. It is possible that the stream changed.");
         if (!FlushFileBuffers(dest))
-            throw new Win32IOException(Marshal.GetLastPInvokeError(), "Flushing to disk", destinationFile + stream.Name);
+            throw new Win32IOException(Marshal.GetLastPInvokeError(), "The final write to the disk", destinationFile + stream.Name);
         return sha.GetHashAndReset();
     }
 
@@ -362,7 +362,7 @@ public static unsafe class SafeFile
             try { pendingRead?.Wait(); } catch { /* the original exception is what matters */ }
         }
         if (offset != expectedLength)
-            throw new IOException($"Read {offset:N0} bytes but the file should be {expectedLength:N0} bytes; it may have changed.");
+            throw new IOException($"The read gave {offset:N0} bytes, but the expected size of the file is {expectedLength:N0} bytes. It is possible that the file changed.");
         return sha.GetHashAndReset();
     }
 
@@ -412,9 +412,9 @@ public static unsafe class SafeFile
             try { pendingRead?.Wait(); } catch { }
         }
         if (offset != length)
-            throw new IOException($"Copied {offset:N0} bytes but the source should be {length:N0} bytes; it may have changed.");
+            throw new IOException($"The copy has {offset:N0} bytes, but the expected size of the source file is {length:N0} bytes. It is possible that the source file changed.");
         if (!FlushFileBuffers(dest))
-            throw new Win32IOException(Marshal.GetLastPInvokeError(), "Flushing to disk", destinationPath);
+            throw new Win32IOException(Marshal.GetLastPInvokeError(), "The final write to the disk", destinationPath);
         return sha.GetHashAndReset();
     }
 
@@ -483,10 +483,10 @@ public static unsafe class SafeFile
                 try { pendingRead?.Wait(); } catch { /* the original exception is what matters */ }
             }
             if (offset != length)
-                throw new IOException($"Read {offset:N0} bytes but the file should be {length:N0} bytes; it may have changed.");
+                throw new IOException($"The read gave {offset:N0} bytes, but the expected size of the file is {length:N0} bytes. It is possible that the file changed.");
             Task[] flushes = open.Select(o => Task.Run(() =>
             {
-                if (!FlushFileBuffers(o.Handle)) throw new Win32IOException(Marshal.GetLastPInvokeError(), "Flushing to disk", o.Destination.Path);
+                if (!FlushFileBuffers(o.Handle)) throw new Win32IOException(Marshal.GetLastPInvokeError(), "The final write to the disk", o.Destination.Path);
             })).ToArray();
             DropFailed(open, flushes);
             return open.Count == 0 ? null : new MultiCopyHashes(ToHex(sha.GetHashAndReset()), ToHex(xxh.GetCurrentHash()));
@@ -526,7 +526,7 @@ public static unsafe class SafeFile
         }
         catch (IOException e) when ((e.HResult & 0xFFFF) == ERROR_INVALID_PARAMETER)
         {
-            throw new Win32IOException(ERROR_INVALID_PARAMETER, "Reading", "(open file)");
+            throw new Win32IOException(ERROR_INVALID_PARAMETER, "The read operation", "(open file)");
         }
     }
 
@@ -535,7 +535,7 @@ public static unsafe class SafeFile
     {
         using SafeFileHandle h = CreateFile(ToExtendedPath(path), FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
             FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, 0);
-        if (h.IsInvalid) throw new Win32IOException(Marshal.GetLastPInvokeError(), "Opening to set timestamps", path);
+        if (h.IsInvalid) throw new Win32IOException(Marshal.GetLastPInvokeError(), "The open operation for the timestamps", path);
         uint attributes = (uint)(from.Attributes & CopyableAttributes);
         var info = new FILE_BASIC_INFO
         {
@@ -546,7 +546,7 @@ public static unsafe class SafeFile
             FileAttributes = attributes == 0 ? (uint)FileAttributes.Normal : attributes,
         };
         if (!SetFileInformationByHandle(h, FileBasicInfo, &info, (uint)sizeof(FILE_BASIC_INFO)))
-            throw new Win32IOException(Marshal.GetLastPInvokeError(), "Setting timestamps", path);
+            throw new Win32IOException(Marshal.GetLastPInvokeError(), "The change of the timestamps", path);
     }
 
     /// <summary>Sets creation/modification times of a directory (used to mirror source folder dates).</summary>
@@ -554,10 +554,10 @@ public static unsafe class SafeFile
     {
         using SafeFileHandle h = CreateFile(ToExtendedPath(path), FILE_WRITE_ATTRIBUTES,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
-        if (h.IsInvalid) throw new Win32IOException(Marshal.GetLastPInvokeError(), "Opening folder", path);
+        if (h.IsInvalid) throw new Win32IOException(Marshal.GetLastPInvokeError(), "The open operation for the folder", path);
         var info = new FILE_BASIC_INFO { CreationTime = creationTime, LastWriteTime = lastWriteTime };
         if (!SetFileInformationByHandle(h, FileBasicInfo, &info, (uint)sizeof(FILE_BASIC_INFO)))
-            throw new Win32IOException(Marshal.GetLastPInvokeError(), "Setting folder times", path);
+            throw new Win32IOException(Marshal.GetLastPInvokeError(), "The change of the folder times", path);
     }
 
     /// <summary>
@@ -586,7 +586,7 @@ public static unsafe class SafeFile
         {
             int err = Marshal.GetLastPInvokeError();
             if (err == ERROR_FILE_NOT_FOUND && DirectoryExists(Path.GetDirectoryName(Path.GetFullPath(path))!)) return DeleteOutcome.AlreadyGone;
-            throw new Win32IOException(err == ERROR_FILE_NOT_FOUND ? ERROR_PATH_NOT_FOUND : err, "Opening for delete", path);
+            throw new Win32IOException(err == ERROR_FILE_NOT_FOUND ? ERROR_PATH_NOT_FOUND : err, "The open operation before the delete", path);
         }
         FileSnapshot now = Snapshot(h, path);
         if (!stillSafeToDelete(now)) return DeleteOutcome.ChangedNotDeleted;
@@ -595,7 +595,7 @@ public static unsafe class SafeFile
         if (SetFileInformationByHandle(h, FileDispositionInfoEx, &flags, sizeof(uint))) return DeleteOutcome.Deleted;
         int error = Marshal.GetLastPInvokeError();
         if (error is not (ERROR_INVALID_PARAMETER or ERROR_NOT_SUPPORTED or ERROR_INVALID_FUNCTION))
-            throw new Win32IOException(error, "Deleting", path);
+            throw new Win32IOException(error, "The delete operation", path);
 
         // File systems without POSIX delete (FAT/exFAT): clear read-only, then use the classic disposition.
         if (now.Attributes.HasFlag(FileAttributes.ReadOnly))
@@ -603,11 +603,11 @@ public static unsafe class SafeFile
             uint attrs = (uint)(now.Attributes & CopyableAttributes & ~FileAttributes.ReadOnly);
             var basic = new FILE_BASIC_INFO { FileAttributes = attrs == 0 ? (uint)FileAttributes.Normal : attrs };
             if (!SetFileInformationByHandle(h, FileBasicInfo, &basic, (uint)sizeof(FILE_BASIC_INFO)))
-                throw new Win32IOException(Marshal.GetLastPInvokeError(), "Clearing read-only before delete", path);
+                throw new Win32IOException(Marshal.GetLastPInvokeError(), "The removal of the read-only attribute before the delete", path);
         }
         byte delete = 1;
         if (!SetFileInformationByHandle(h, FileDispositionInfo, &delete, 1))
-            throw new Win32IOException(Marshal.GetLastPInvokeError(), "Deleting", path);
+            throw new Win32IOException(Marshal.GetLastPInvokeError(), "The delete operation", path);
         return DeleteOutcome.Deleted;
     }
 

@@ -50,10 +50,10 @@ public class UndoWhereTests
         // Opened from the receipt in the renamed folder: the same place, and the note does not claim Tuesday's folder is it.
         UndoPreview opened = UndoFactory.Preview(t.Journal, startedFrom: JobPaths.ReceiptTextPath(monday, id));
         Assert.True(JobPaths.SamePath(monday, opened.To), opened.To);
-        Assert.Contains($"{t.Source} can't be confirmed as the folder the files came from", opened.ToNote);
+        Assert.Contains($"The undo can no longer confirm that {t.Source} is the folder that the files came from", opened.ToNote);
         Assert.False(preview.DriveLetterChanged);
         Assert.False(preview.CreatesFolder);
-        Assert.Contains("which holds this sort's receipt", preview.ToNote);
+        Assert.Contains("which has the receipt of this sort", preview.ToNote);
         Assert.Contains(preview.ToNote!, preview.Describe());
         Assert.Empty(preview.PlaceTaken); // Tuesday's C0001.MP4 is not in the way: it is in another folder
 
@@ -62,7 +62,7 @@ public class UndoWhereTests
         Assert.Equal(tuesday, Fingerprints(t.Source)); // Tuesday's folder is untouched...
         Assert.False(Directory.Exists(JobPaths.LogFolder(t.Source)), "...and gets no logs or receipts of Monday's sort");
         string receipt = File.ReadAllText(JobPaths.ReceiptTextPath(monday, id)); // brought up to date where it is, not in the new folder
-        Assert.Contains("This sort was undone on", receipt);
+        Assert.Contains("undid this sort", receipt);
         Assert.Contains("its log is next to this file", receipt);
     }
 
@@ -85,7 +85,7 @@ public class UndoWhereTests
         // Not knowing where it went, the undo would recreate the folder (and says so); opened from the receipt, it goes there.
         UndoPreview blind = UndoFactory.Preview(journal);
         Assert.True(blind.CreatesFolder);
-        Assert.Contains($"{t.Source} no longer exists; it will be created", string.Join("\n", blind.Describe()));
+        Assert.Contains($"{t.Source} no longer exists. The undo will make this folder again", string.Join("\n", blind.Describe()));
         UndoPreview preview = UndoFactory.Preview(journal, startedFrom: receipt);
         Assert.Null(preview.Blocked);
         Assert.True(JobPaths.SamePath(archive, preview.To));
@@ -116,15 +116,15 @@ public class UndoWhereTests
         UndoPreview preview = UndoFactory.Preview(journal, startedFrom: receipt);
         Assert.Null(preview.Blocked);
         Assert.True(JobPaths.SamePath(t.Source, preview.To), preview.To);
-        Assert.Contains($"{copy} holds a copy of the receipt", preview.ToNote);
+        Assert.Contains($"{copy} has a copy of the receipt", preview.ToNote);
         Assert.DoesNotContain("renamed or moved", preview.ToNote);
         Assert.Equal(preview.GoingBack.Count, UndoFactory.Preview(journal).GoingBack.Count);
 
         using (JobRunner runner = UndoFactory.Start(journal, receipt, null)) Assert.True(runner.Run().NothingLeftBehind);
         AssertBackIn(t.Source, before);
         Assert.Equal(copyBefore, Fingerprints(copy)); // the copy is left as it is
-        Assert.Contains("This sort was undone on", File.ReadAllText(JobPaths.ReceiptTextPath(t.Source, id)));
-        Assert.DoesNotContain("This sort was undone on", File.ReadAllText(receipt));
+        Assert.Contains("undid this sort", File.ReadAllText(JobPaths.ReceiptTextPath(t.Source, id)));
+        Assert.DoesNotContain("undid this sort", File.ReadAllText(receipt));
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public class UndoWhereTests
         Assert.True(JobPaths.SamePath(t.Source, UndoFactory.Preview(t.Journal).To)); // not started from the copy: the original, as before
         UndoPreview refused = UndoFactory.Preview(t.Journal, startedFrom: receipt);
         Assert.True(refused.NeedsFolder, refused.Blocked);
-        Assert.Contains("Two folders could be the one the files came from", refused.Blocked);
+        Assert.Contains("It is not clear which folder the files came from", refused.Blocked);
         Assert.Contains(copy, refused.Blocked);
         Assert.Contains(t.Source, refused.Blocked);
         Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal, receipt));
@@ -170,15 +170,15 @@ public class UndoWhereTests
 
         UndoPreview refused = UndoFactory.Preview(t.Journal);
         Assert.True(refused.NeedsFolder);
-        Assert.Contains($"The folder {t.Source} is not the one the files came from", refused.Blocked);
-        Assert.Contains("Choose the folder the files came from", refused.Blocked);
-        Assert.Contains("is not the one the files came from", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal)).Message);
+        Assert.Contains($"The folder {t.Source} is not the folder that the files came from", refused.Blocked);
+        Assert.Contains("Choose the folder that the files came from", refused.Blocked);
+        Assert.Contains("is not the folder that the files came from", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal)).Message);
         Assert.Empty(Directory.EnumerateFileSystemEntries(t.Source)); // nothing was written into it
 
         UndoPreview chosen = UndoFactory.Preview(t.Journal, startedFrom: null, putBackTo: elsewhere);
         Assert.Null(chosen.Blocked);
-        Assert.Contains("the folder you chose", chosen.ToNote);
-        Assert.Contains("the sorted folder", UndoFactory.Preview(t.Journal, null, putBackTo: t.Target).Blocked);
+        Assert.Contains("the folder that you chose", chosen.ToNote);
+        Assert.Contains("it is the target folder of the sort", UndoFactory.Preview(t.Journal, null, putBackTo: t.Target).Blocked);
         using (JobRunner runner = UndoFactory.Start(t.Journal, null, elsewhere)) Assert.True(runner.Run().NothingLeftBehind);
         AssertBackIn(elsewhere, before);
     }
@@ -200,13 +200,13 @@ public class UndoWhereTests
         UndoPreview matched = UndoFactory.Preview(t.Journal);
         Assert.Null(matched.Blocked);
         Assert.True(matched.CreatesFolder);
-        Assert.Contains("(on the drive the files came from)", string.Join("\n", matched.Describe()));
+        Assert.Contains(", on the drive that the files came from.", string.Join("\n", matched.Describe()));
 
         ForgetSourceSerial(t.Journal);
         UndoPreview preview = UndoFactory.Preview(t.Journal);
         Assert.False(preview.CreatesFolder);
         Assert.True(preview.NeedsFolder);
-        Assert.Contains("can't be confirmed as the drive the files came from", preview.Blocked);
+        Assert.Contains($"The undo cannot confirm that the drive at {Drives.Letter(t.Source)} is the drive that the files came from", preview.Blocked);
         Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal));
         Assert.False(Directory.Exists(t.Source), "the folder was created on an unmatched drive");
     }
@@ -240,7 +240,7 @@ public class UndoWhereTests
         }
         UndoPreview refused = UndoFactory.Preview(t.Journal);
         Assert.True(refused.NeedsFolder, refused.Blocked);
-        Assert.Contains("is not the one the files came from", refused.Blocked);
+        Assert.Contains("is not the folder that the files came from", refused.Blocked);
 
         Directory.Delete(t.Source, recursive: true);
         MoveFolder(aside, t.Source);
@@ -344,7 +344,7 @@ public class UndoWhereTests
         string receipt = JobPaths.ReceiptTextPath(t.Source, id);
         Assert.Null(UndoFactory.ResolveJournal(receipt, out string? why));
         Assert.Contains($"The job log is no longer at {journal}", why);
-        Assert.Contains("is connected, so the sorted folder was probably renamed, moved or deleted", why);
+        Assert.Contains("is connected, so someone probably renamed, moved or deleted the target folder", why);
         Assert.DoesNotContain("not connected", why);
 
         JobListing listing = Assert.Single(JobCatalog.ForFolder(t.Source));
@@ -357,10 +357,10 @@ public class UndoWhereTests
         uint serial = JournalReader.Read(Path.Join(t.Source, @"Card1\deep\inside\Sorted", JobPaths.LogFolderName, id + JobPaths.JournalSuffix)).Header.TargetSerial;
         var remembered = new RecentJob { JournalPath = journal, JobId = id, Target = t.Target, TargetSerial = serial };
         Assert.True(remembered.LogMissing);
-        Assert.Contains("is connected, so the sorted folder was probably renamed, moved or deleted", remembered.WhyNotReachable);
+        Assert.Contains("is connected, so someone probably renamed, moved or deleted the target folder", remembered.WhyNotReachable);
         // Remembered without the drive's serial number (an older entry): the drive at the letter may be another one.
         var older = new RecentJob { JournalPath = journal, JobId = id, Target = t.Target };
-        Assert.Contains("it is not known whether it is the drive that holds the log", older.WhyNotReachable);
+        Assert.Contains("it is not clear if this drive is the drive that holds the log", older.WhyNotReachable);
         Assert.Contains("renamed, moved or deleted", older.WhyNotReachable);
         Assert.DoesNotContain("is connected, so", older.WhyNotReachable);
         // Another drive with the log's letter: the log's drive is not connected.
@@ -421,17 +421,17 @@ public class RecentJobsTests
 
         // The receipt names the log's drive: it is connected, so the folder was renamed or moved.
         Assert.Null(UndoFactory.ResolveJournal(receipt, out string? why));
-        Assert.Contains("is connected, so the sorted folder was probably renamed, moved or deleted", why);
+        Assert.Contains("is connected, so someone probably renamed, moved or deleted the target folder", why);
 
         // An older receipt without that line: this PC's recent-jobs list still knows the drive.
         File.WriteAllLines(receipt, File.ReadAllLines(receipt).Where(l => !l.StartsWith("Job log drive serial number: ", StringComparison.Ordinal)));
         Assert.Null(UndoFactory.ResolveJournal(receipt, out why));
-        Assert.Contains("is connected, so the sorted folder was probably renamed, moved or deleted", why);
+        Assert.Contains("is connected, so someone probably renamed, moved or deleted the target folder", why);
 
         // Nothing knows the drive: another drive may have the letter now, so both are said.
         RecentJobs.Forget(id);
         Assert.Null(UndoFactory.ResolveJournal(receipt, out why));
-        Assert.Contains("it is not known whether it is the drive that holds the log", why);
+        Assert.Contains("it is not clear if this drive is the drive that holds the log", why);
         Assert.DoesNotContain("is connected, so", why);
         Assert.DoesNotContain("not connected", why);
         JobListing listing = Assert.Single(JobCatalog.ForFolder(t.Source));

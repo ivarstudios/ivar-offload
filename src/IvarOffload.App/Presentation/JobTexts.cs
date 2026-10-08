@@ -38,46 +38,48 @@ public static class JobTexts
     /// opens the Backup tab with the card selected.
     /// </summary>
     public static string MemoryCardQuestion(string drive) =>
-        $"This looks like a memory card or camera drive ({drive}). Sort moves files around on it.\n\n"
-        + "Back the card up to another drive first, then sort the backup. "
-        + "Sort anyway only if you mean to sort the card itself - a camera that records to an SSD, for example.";
+        $"This looks like a memory card or camera drive ({drive}). A sort moves files to different folders on it.\n\n"
+        + "Back up the card to a different drive first. Then sort the backup. "
+        + "Click “Sort anyway” only if you want to sort the card itself (for example, if your camera records to an SSD).";
 
     /// <summary>The safe answer to <see cref="MemoryCardQuestion"/>: moves nothing and opens the Backup tab with the card selected.</summary>
     public const string MemoryCardDontSort = "Back up this card first";
 
     /// <summary>The status after <see cref="MemoryCardDontSort"/>.</summary>
-    public const string MemoryCardNotSorted = "Nothing was moved. The Backup tab is open with the card selected: back it up first, then sort the backup.";
+    public const string MemoryCardNotSorted = "The app did not move any files. The Backup tab is open, and the card is selected. Back up the card first. Then sort the backup.";
 
     /// <summary>"26 Sep 15:42", with the year when it is not this year.</summary>
     public static string Date(string? created) => Format.JobDate(created);
 
-    private static string More(int more) => more <= 0 ? "" : $"  (+{RunOutcome.Count(more, "more unfinished job")} - offered when this one is done.)";
+    private static string More(int more) => more <= 0 ? ""
+        : $"  (+{RunOutcome.Count(more, "more unfinished job")}: the app shows {(more == 1 ? "it" : "them")} when this job is done.)";
 
     /// <summary>The button that ends an unfinished job and leaves what did not move where it is.</summary>
     public static string EndJobButton(bool undo) => "Stop here...";
 
     public static string EndJobToolTip(bool undo) => undo
-        ? "Ends the undo. The files not moved back yet stay in the sorted folder. Nothing is deleted."
-        : "Ends the sort. The files not moved yet stay in the folder to sort. Nothing is deleted.";
+        ? "Ends the undo. The files that did not return yet stay in the target folder. The app does not delete any files."
+        : "Ends the sort. The files that did not move yet stay in the source folder. The app does not delete any files.";
 
     /// <summary>The question before ending a job. What is left can be sorted by a new sort, or put back by another undo.</summary>
     public static (string Title, string Text) EndJobQuestion(bool undo) => undo
-        ? ("Stop here", "Stop this undo without moving the rest back?\n\n"
-            + "A file that is being moved back is finished or put back, so nothing is left half-done. The files not moved back yet "
-            + "stay in the sorted folder, and nothing is deleted. You can undo the rest later with “Undo a sort”.")
-        : ("Stop here", "Stop this sort without moving the rest?\n\n"
-            + "A file that is being moved is finished or put back, so nothing is left half-done. The files not moved yet "
-            + "stay in the folder to sort, and nothing is deleted. You can sort them later.");
+        ? ("Stop here", "Stop this undo here? The remaining files will not return.\n\n"
+            + "The app completes or rolls back the file that is in progress, so no move stays half-done. "
+            + "The remaining files stay in the target folder. The app does not delete any files. "
+            + "Later, you can undo the remaining files with “Undo a sort”.")
+        : ("Stop here", "Stop this sort here? The remaining files will not move.\n\n"
+            + "The app completes or rolls back the file that is in progress, so no move stays half-done. "
+            + "The remaining files stay in the source folder. The app does not delete any files. You can sort them later.");
 
     /// <summary>Banner for an unfinished job whose log can be reached: it can be resumed or ended.</summary>
     /// <returns>A title, the job's folders (one line), and what the buttons do.</returns>
     public static (string Title, string Paths, string Text) Banner(JobState job, int more)
     {
         JobHeader h = job.Header;
-        string title = $"An unfinished {(job.IsUndo ? "undo" : "sort")} was found: {job.DoneCount:N0} of {job.Items.Count:N0} files "
-            + $"{(job.IsUndo ? "moved back" : "moved")} ({Planner.Word(h.Mode)}), started {Date(h.Created)}";
-        string text = $"Resume continues exactly where it stopped. “{EndJobButton(job.IsUndo)}” ends it and leaves the rest in "
-            + (job.IsUndo ? "the sorted folder" : "the folder to sort") + " - nothing is deleted." + More(more);
+        string title = $"Unfinished {(job.IsUndo ? "undo" : "sort")}: {job.DoneCount:N0} of {job.Items.Count:N0} files "
+            + $"{(job.IsUndo ? "returned" : "moved")} ({Planner.Word(h.Mode)}), started {Date(h.Created)}";
+        string text = $"Resume continues the job from the point where it stopped. “{EndJobButton(job.IsUndo)}” ends the job and keeps the remaining files in "
+            + (job.IsUndo ? "the target folder" : "the source folder") + ". The app does not delete any files." + More(more);
         return (title, $"{h.Source}  →  {h.Target}", text);
     }
 
@@ -93,14 +95,14 @@ public static class JobTexts
         string folder = LogFolderOf(job.JournalPath, job.Target);
         return why switch
         {
-            MissingLog.FolderMoved => ($"Unfinished {kind}: its folder {folder} was renamed or moved ({job.DriveName} is connected)", paths,
-                "Nothing was lost. Put the folder back where it was (or give it its old name), then press “Check again” to resume the job. "
-                + "If you removed it on purpose, press “Forget this job”." + More(more)),
-            MissingLog.Either => ($"Unfinished {kind}: its log is not in {folder} - {job.DriveName} is not connected, or the folder was renamed or moved", paths,
-                "Nothing was lost. Connect the drive, or put the folder back where it was (or give it its old name), then press “Check again” "
-                + "to resume the job. If you removed it on purpose, press “Forget this job”." + More(more)),
-            _ => ($"Unfinished {kind} on {job.DriveName} (not connected) - connect the drive to continue", paths,
-                "Nothing was lost: once the drive is back, press “Check again” and resume the job where it stopped." + More(more)),
+            MissingLog.FolderMoved => ($"Unfinished {kind}: the folder {folder} has a new name or location ({job.DriveName} is connected)", paths,
+                "Nothing is lost. Move the folder to its old location, or give it its old name again. Then click “Check again” to resume the job. "
+                + "If you removed the folder on purpose, click “Forget this job”." + More(more)),
+            MissingLog.Either => ($"The log of this unfinished {kind} is not in {folder}. {job.DriveName} is not connected, or the folder has a new name or location", paths,
+                "Nothing is lost. Connect the drive, or move the folder to its old location (or give it its old name again). Then click “Check again” "
+                + "to resume the job. If you removed the folder on purpose, click “Forget this job”." + More(more)),
+            _ => ($"Unfinished {kind} on {job.DriveName} (not connected). Connect the drive to continue the job.", paths,
+                "Nothing is lost. After you connect the drive, click “Check again”. Then resume the job from the point where it stopped." + More(more)),
         };
     }
 
@@ -146,43 +148,44 @@ public static class JobTexts
     {
         if (p.Blocked is { } blocked)
             return p.NeedsFolder
-                ? ("The folder the files came from can't be confirmed.", blocked + "\n\n" + UndoChooseFolderHint)
-                : ("This sort can't be undone right now.", blocked);
+                ? ("The app cannot identify the folder that the files came from.", blocked + "\n\n" + UndoChooseFolderHint)
+                : ("You cannot undo this sort now.", blocked);
         MoveMode mode = p.Original.Header.Mode;
         // A file whose original place is taken never moves: an identical file is left as it is, a different one is not overwritten.
         List<JobItem> back = p.GoingBack;
         int primaries = MediaRules.CountPrimaries(back.Select(i => i.Rel), mode);
         string question = back.Count == 0
-            ? $"Nothing can go back to {p.To}."
-            : $"Move {RunOutcome.Things(back.Count, primaries, mode, back.Sum(i => i.Size))} back to {p.To}?";
+            ? $"No files can return to {p.To}."
+            : $"Return {RunOutcome.Things(back.Count, primaries, mode, back.Sum(i => i.Size))} to {p.To}?";
 
         var lines = new List<string>();
         if (p.DriveLetterChanged)
-            lines.Add($"The drive the files came from has another letter now: they go back to {p.To} (it was {p.Original.Header.Source}).");
+            lines.Add($"The drive that the files came from has a different letter now. The files return to {p.To}, not to {p.Original.Header.Source}.");
         // The folder the files go back to is not the sort's source folder: it was renamed, or the user chose it.
         if (p.ToNote is { } note) lines.Add(note);
-        if (p.CreatesFolder && back.Count > 0) lines.Add($"{p.To} no longer exists; it will be created (on the drive the files came from).");
+        if (p.CreatesFolder && back.Count > 0) lines.Add($"{p.To} does not exist now. The app will make this folder again on the drive that the files came from.");
         foreach (var group in p.CannotGoBack.GroupBy(i => i.Reason).OrderByDescending(g => g.Count()))
         {
             int n = group.Count();
             string files = RunOutcome.Files(n);
             lines.Add(group.Key switch
             {
-                SkipReasons.ChangedSinceSorted => $"{files} changed since the sort and will stay where {(n == 1 ? "it is" : "they are")}.",
-                SkipReasons.NotInSortedFolder => $"{files} {(n == 1 ? "is" : "are")} no longer in the sorted folder (moved, renamed or deleted since the sort) and can't go back.",
-                _ => $"{files} can't go back: {group.Key}.",
+                SkipReasons.ChangedSinceSorted => $"{files} changed after the sort and will stay where {(n == 1 ? "it is" : "they are")}.",
+                SkipReasons.NotInSortedFolder => $"{files} {(n == 1 ? "is" : "are")} no longer in the target folder (someone moved, renamed or deleted {(n == 1 ? "it" : "them")} after the sort), "
+                    + $"so {(n == 1 ? "it" : "they")} cannot return.",
+                _ => $"{files} cannot return: {group.Key}.",
             });
         }
         if (p.PlaceTaken.Count > 0)
             lines.Add($"{RunOutcome.Files(p.PlaceTaken.Count)} {(p.PlaceTaken.Count == 1 ? "has" : "have")} a file with the same name in "
-                + $"{(p.PlaceTaken.Count == 1 ? "its" : "their")} original place, so {(p.PlaceTaken.Count == 1 ? "it stays" : "they stay")} in the sorted folder: "
-                + "an identical file there is left as it is, and a different one is never overwritten.");
+                + $"{(p.PlaceTaken.Count == 1 ? "its" : "their")} original location, so {(p.PlaceTaken.Count == 1 ? "it stays" : "they stay")} in the target folder. "
+                + "An identical file there stays as it is. The app never overwrites a different file.");
         if (p.AlreadyBack.Count > 0)
-            lines.Add($"{RunOutcome.Files(p.AlreadyBack.Count)} {(p.AlreadyBack.Count == 1 ? "is" : "are")} already back in the original place.");
+            lines.Add($"{RunOutcome.Files(p.AlreadyBack.Count)} {(p.AlreadyBack.Count == 1 ? "is" : "are")} already in the original location.");
         if (back.Count > 0)
             lines.Add(p.Method == TransferMethod.Rename
-                ? "Same drive: the files are renamed back; no file data is copied."
-                : "Different drives: each file is copied back and checked by SHA-256 before it is removed from the sorted folder.");
+                ? "Same drive: the app renames the files to their old paths. It does not copy file data."
+                : "Different drives: the app copies each file and checks the copy with SHA-256 before it removes the file from the target folder.");
         return (question, string.Join("\n", lines));
     }
 
@@ -196,13 +199,13 @@ public static class JobTexts
     public static UndoStep UndoNext(UndoPreview p) => p.NeedsFolder ? UndoStep.ChooseFolder : UndoCanMove(p) ? UndoStep.Ask : UndoStep.Inform;
 
     /// <summary>The button that picks the folder an undo puts the files back into, when it can't be confirmed.</summary>
-    public const string UndoChooseFolderButton = "Choose the folder the files came from...";
+    public const string UndoChooseFolderButton = "Choose the folder that the files came from...";
 
     /// <summary>The title of that folder picker.</summary>
-    public const string UndoChooseFolderTitle = "Choose the folder the files came from";
+    public const string UndoChooseFolderTitle = "Choose the folder that the files came from";
 
     private const string UndoChooseFolderHint =
-        "The folder you choose is checked again, and you see what would go back before anything moves.";
+        "The app then checks the folder that you choose. Before any file moves, the app shows you which files can return.";
 
     /// <summary>The Status column of the "Undo a previous sort" list. <paramref name="why"/>: see <see cref="WhyLogMissing"/>.</summary>
     public static string ListingStatus(JobListing j, MissingLog why = MissingLog.DriveAway)
@@ -216,9 +219,9 @@ public static class JobTexts
             };
         if (j.Kind == JobKind.Undo) return "undo job";
         // An undo that was ended early, or that left files in the sorted folder: the rest can be undone.
-        if (j.PartlyUndone) return "partly undone - can undo the rest";
+        if (j.PartlyUndone) return "partly undone (you can undo the rest)";
         if (j.UndoneBy is { Status: "completed" }) return "undone";
-        if (j.UndoneBy is { Status: "started" }) return "being undone";
+        if (j.UndoneBy is { Status: "started" }) return "undo in progress";
         return j.Status switch
         {
             "unfinished" => "unfinished",
@@ -234,24 +237,25 @@ public static class JobTexts
     /// <summary>Why a listed job cannot be undone, in plain words; null when it can be tried.</summary>
     public static string? WhyNotUndo(JobListing j, MissingLog why = MissingLog.DriveAway) => CanTryUndo(j) ? null : ListingStatus(j, why) switch
     {
-        "not connected" => $"The drive with this job's log ({j.DriveName}) is not connected. Connect it to undo this sort.",
-        "folder renamed or moved" => $"This sort's log is no longer in {LogFolderOf(j.JournalPath, j.Target)} (the folder was renamed or moved). "
-            + "Choose the sorted folder where it is now (“Choose a folder...”), or open its log (“Open a log file...”).",
-        "log not found" => $"This sort's log is not in {LogFolderOf(j.JournalPath, j.Target)}: its drive ({j.DriveName}) is not connected, "
-            + "or the folder was renamed or moved. Connect the drive, or choose the sorted folder where it is now (“Choose a folder...”), "
+        "not connected" => $"The drive with the log of this job ({j.DriveName}) is not connected. To undo this sort, connect the drive.",
+        "folder renamed or moved" => $"The log of this sort is no longer in {LogFolderOf(j.JournalPath, j.Target)}, because the folder has a new name or location. "
+            + "Choose the target folder where it is now (“Choose a folder...”), or open its log (“Open a log file...”).",
+        "log not found" => $"The log of this sort is not in {LogFolderOf(j.JournalPath, j.Target)}. Its drive ({j.DriveName}) is not connected, "
+            + "or the folder has a new name or location. Connect the drive, or choose the target folder where it is now (“Choose a folder...”), "
             + "or open its log (“Open a log file...”).",
-        "undo job" => "This is an undo job. An undo can't be undone - to separate the files again, run a new sort.",
-        "undone" => "This sort was already undone. A sort can be undone once - to separate the files again, run a new sort.",
-        "being undone" => "An undo of this sort was started and has not ended. Resume it (or end it) from the banner in the main window first.",
-        "unfinished" => "This sort has not finished yet. Resume it (or end it) first, then undo it.",
+        "undo job" => "This is an undo job. You cannot undo an undo. To separate the files again, start a new sort.",
+        "undone" => "This sort is already undone. You can undo a sort only one time. To separate the files again, start a new sort.",
+        "undo in progress" => "An undo of this sort started and is not complete. First, resume the undo or end it, with the banner in the main window.",
+        "unfinished" => "This sort is not finished. First, resume the sort or end it. Then undo it.",
         "never started" => "This sort never started, so there is nothing to undo.",
         _ => "This sort did not move any files, so there is nothing to undo.",
     };
 
     /// <summary>After "Open a log file..." found no job log.</summary>
     public const string LogNotFound =
-        "This file is not a job log or receipt, or the job log it points to can't be found: its drive is not connected, or the sorted folder "
-        + "was renamed or moved. Connect the drive, or choose the sorted folder where it is now (“Choose a folder...”) and open the log in it.";
+        "This file is not a job log or a receipt, or the app cannot find the job log that it refers to. The drive of that job log is not connected, "
+        + "or the target folder has a new name or location. Connect the drive, or choose the target folder where it is now (“Choose a folder...”). "
+        + "Then open the log in that folder.";
 
     /// <summary>
     /// After "Open a log file..." picked a receipt whose job log is not where the receipt says (<paramref name="recordedLog"/>).
@@ -262,12 +266,12 @@ public static class JobTexts
         string folder = LogFolderOf(recordedLog, Path.GetDirectoryName(recordedLog) ?? recordedLog);
         return why switch
         {
-            MissingLog.FolderMoved => $"The job log this receipt names is no longer in {folder}: its drive is connected, so the sorted folder was renamed or moved. "
-                + $"Choose the sorted folder where it is now (“Choose a folder...”), or open the log in its {JobPaths.LogFolderName} folder (“Open a log file...”).",
-            MissingLog.Either => $"The job log this receipt names is not in {folder}: its drive is not connected, or the sorted folder was renamed or moved. "
-                + "Connect the drive and open the receipt again, or choose the sorted folder where it is now (“Choose a folder...”).",
-            _ => $"The job log this receipt names is in {folder}, and that drive is not connected. Connect it and open the receipt again, "
-                + "or choose the sorted folder where it is now (“Choose a folder...”).",
+            MissingLog.FolderMoved => $"The job log that this receipt names is no longer in {folder}. Its drive is connected, so the target folder has a new name or location. "
+                + $"Choose the target folder where it is now (“Choose a folder...”), or open the log in its {JobPaths.LogFolderName} folder (“Open a log file...”).",
+            MissingLog.Either => $"The job log that this receipt names is not in {folder}. Its drive is not connected, or the target folder has a new name or location. "
+                + "You can connect the drive and open the receipt again. Or you can choose the target folder where it is now (“Choose a folder...”).",
+            _ => $"The job log that this receipt names is in {folder}, and that drive is not connected. You can connect the drive and open the receipt again. "
+                + "Or you can choose the target folder where it is now (“Choose a folder...”).",
         };
     }
 

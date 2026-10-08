@@ -51,10 +51,10 @@ public class KnownLimitsTests
         // The summary next to the log (and the command line's status, which prints it) says what the result says.
         string summary = File.ReadAllText(JobPaths.SummaryPath(t.Journal));
         Assert.Equal(JobReports.Summary(recorded), summary.TrimStart('\uFEFF'));
-        Assert.Contains("Still in source: none of the files this sort planned to move.", summary);
-        Assert.Contains("Also still in source: 2 files", summary);
+        Assert.Contains("Still in the source folder: none of the files that this sort planned to move.", summary);
+        Assert.Contains("Also still in the source folder: 2 files", summary);
         Assert.Contains("A new sort of the folder can move 1 file now.", summary);
-        Assert.Contains("Found in the source when it was checked again after the job (2 files", summary);
+        Assert.Contains("In the source folder at the check after the job (2 files", summary);
         Assert.Contains($"  {SourceCheck.OnlineOnlyReason} - 1 file", summary);
         Assert.Contains(@"    b\C0006.MOV", summary);
 
@@ -64,9 +64,9 @@ public class KnownLimitsTests
         (SourceCheck clean, _) = SourceCheck.Rescan(recorded, null, default);
         SourceCheck.Record(recorded, clean);
         summary = File.ReadAllText(JobPaths.SummaryPath(t.Journal));
-        Assert.Contains("nothing else that should move was found", summary);
-        Assert.Contains("Still in source: nothing that should have moved.", summary);
-        Assert.DoesNotContain("Found in the source when it was checked again", summary);
+        Assert.Contains("and found nothing else to move.", summary);
+        Assert.Contains("Still in the source folder: no files to move.", summary);
+        Assert.DoesNotContain("In the source folder at the check after the job", summary);
     }
 
     [Fact]
@@ -87,8 +87,8 @@ public class KnownLimitsTests
         Assert.Null(plan);
         Assert.False(check.IsChecked);
         SourceCheck.Record(job, check);
-        Assert.Equal("the source folder can't be reached", JournalReader.Read(t.Journal).Rescan?.NotChecked);
-        Assert.Contains("the source could not be checked again after the job (the source folder can't be reached)",
+        Assert.Equal("the source folder is not available", JournalReader.Read(t.Journal).Rescan?.NotChecked);
+        Assert.Contains("could not check the source folder again after the job (the source folder is not available)",
             File.ReadAllText(JobPaths.SummaryPath(t.Journal)));
     }
 
@@ -138,8 +138,8 @@ public class KnownLimitsTests
         Assert.Equal(0, state.MissingCount);
         SourceCheck check = SourceCheck.ForJob(state);
         Assert.Empty(check.Missing);
-        Assert.Contains("the job was ended while the source was not there", check.Left.Single(f => f.Rel == item.Rel).Reason);
-        Assert.Contains("the job was ended while their originals could not be checked", JobReports.Summary(state));
+        Assert.Contains("not moved because you ended the job when the source folder was not available", check.Left.Single(f => f.Rel == item.Rel).Reason);
+        Assert.Contains("You ended the job when it could not check their originals", JobReports.Summary(state));
         Assert.DoesNotContain("Missing:", JobReports.Summary(state));
     }
 
@@ -191,19 +191,20 @@ public class KnownLimitsTests
 
         JobReports.TryRefresh(t.Journal);
         Assert.Contains(File.ReadAllLines(csv), r => r.StartsWith("moved", StringComparison.Ordinal) && r.Contains(Path.Join(t.Source, second.Rel)));
-        Assert.Contains(File.ReadAllLines(csv), r => r.StartsWith("not moved", StringComparison.Ordinal) && r.Contains("the job was interrupted"));
-        Assert.DoesNotContain(File.ReadAllLines(csv), r => r.Contains("it may be in the destination by now"));
+        Assert.Contains(File.ReadAllLines(csv), r => r.StartsWith("not moved", StringComparison.Ordinal) && r.Contains("the job stopped before the end. Resume continues it"));
+        Assert.DoesNotContain(File.ReadAllLines(csv), r => r.Contains("The file can be in the target folder now"));
         string text = File.ReadAllText(receipt);
-        Assert.Contains("it was interrupted, and can be resumed or ended", text);
-        Assert.DoesNotContain("while the job was running", text);
+        Assert.Contains("it stopped before the end. You can resume it or end it", text);
+        Assert.DoesNotContain(", during the job.", text);
         // The fourth clip was not reached; the third was being renamed: it is here or already in the target.
-        Assert.Contains("that were planned to move is still in this folder", text);
-        Assert.Contains($"1 file was being moved when the job was interrupted (\"interrupted\" in the list): it is in this folder or already in {t.Target}", text);
-        Assert.Contains(File.ReadAllLines(csv), r => r.StartsWith("interrupted", StringComparison.Ordinal) && r.Contains("Resume finishes it"));
+        Assert.Contains("that the job planned to move is still in this folder", text);
+        Assert.Contains($"The job stopped during the move of 1 file (\"interrupted\" in the list). This file is in this folder or already in {t.Target}", text);
+        Assert.Contains(File.ReadAllLines(csv), r => r.StartsWith("interrupted", StringComparison.Ordinal) && r.Contains("Resume finishes the move"));
         Assert.Contains(File.ReadAllLines(JobPaths.ManifestPath(t.Journal)), r => r.StartsWith("moved", StringComparison.Ordinal) && r.Contains(second.Rel));
 
         Assert.Equal(RunStatus.Completed, TestTree.Resume(t.Journal).Status);
         Assert.DoesNotContain("interrupted", File.ReadAllText(receipt));
+        Assert.DoesNotContain("stopped", File.ReadAllText(receipt));
     }
 
     // ---- A job log whose folder was moved further away -------------------------------------------------------------------
@@ -341,7 +342,7 @@ public class KnownLimitsTests
         {
             RunResult halted = runner.Run();
             Assert.Equal(RunStatus.Halted, halted.Status);
-            Assert.Contains("now stands for another folder", halted.Message);
+            Assert.Contains("which now shows a different folder", halted.Message);
         }
         Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Join(other, "INGEST")));
 

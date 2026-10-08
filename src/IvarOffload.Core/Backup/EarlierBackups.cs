@@ -104,39 +104,41 @@ public sealed class TopUpOffer
     {
         string when = Created is { Length: >= 16 } at ? at[..16].Replace('T', ' ') : "an earlier day";
         // Files a finished backup does not have were added to the card since; one that was ended early may just not have got to them.
-        string added = EndedEarly ? $"{Count(New, "file")} of the card {(New == 1 ? "is" : "are")} not in that backup" : $"the card has {Count(New, "new file")} since then";
-        string missing = Missing > 0 ? $"{Count(Missing, "file")} of that backup {(Missing == 1 ? "is" : "are")} no longer in its folder (moved out by a sort, or deleted)" : "";
+        string added = EndedEarly ? $"{Count(New, "file")} of the card {(New == 1 ? "is" : "are")} not in that backup" : $"the card now has {Count(New, "new file")}";
+        string missing = Missing > 0 ? $"{Count(Missing, "file")} of that backup {(Missing == 1 ? "is" : "are")} no longer in its folder (because of a sort or a deletion)" : "";
         string kept = KeptInFolder > 0 ? $"{Count(KeptInFolder, "file")} of that backup {(KeptInFolder == 1 ? "is" : "are")} no longer on the card" : "";
         if (!adding)
         {
             var what = new List<string>();
             if (New > 0) what.Add($"{added} ({Format.Bytes(NewBytes)})");
-            if (Changed > 0) what.Add($"{Count(Changed, "file")} changed on the card since");
+            if (Changed > 0) what.Add($"{Count(Changed, "file")} changed on the card after that backup");
             if (missing.Length > 0) what.Add(missing);
             if (kept.Length > 0) what.Add(kept);
-            string state = what.Count == 0 ? "It holds every file of the card as the card is now" : Capitalized(string.Join("; ", what));
+            string state = what.Count == 0 ? "It contains all files of the card as they are now" : string.Join(". ", what.Select(Capitalized));
             string offer = New + Changed + Missing == 0
-                ? "You can verify the whole card against that backup (nothing is copied again) instead of making another full copy."
-                : "You can add what is missing to that backup and verify the whole card, instead of making a new full backup.";
-            return $"This card was backed up on {when} to {Where}{(EndedEarly ? " (that backup was ended before every file was copied)" : "")}. {state}. {offer}";
+                ? "You can check the whole card against that backup (this copies no files again) instead of a new full copy."
+                : "You can add what is missing to that backup and check the whole card, instead of a new full backup.";
+            return $"There is a backup of this card from {when} in {Where}{(EndedEarly ? " (that backup ended before it copied all files)" : "")}. {state}. {offer}";
         }
         var steps = new List<string>
         {
-            New == 0 ? "no file is missing from it" : EndedEarly ? $"{Count(New, "file")} not in it yet {(New == 1 ? "is" : "are")} copied" : $"{Count(New, "new file")} {(New == 1 ? "is" : "are")} copied",
+            New == 0 ? "No file is missing from it."
+                : EndedEarly ? $"It copies the {Count(New, "file")} that {(New == 1 ? "is" : "are")} not in it yet."
+                : $"It copies {Count(New, "new file")}.",
         };
         if (Changed > 0)
         {
             int index = Changed - ChangedFiles.Count;
-            string where = string.Join(", ", new[]
-            {
-                ChangedFiles.Count > 0 ? $"{(ChangedFiles.Count == 1 ? "the earlier photo or clip stays" : "earlier photos and clips stay")} next to the new {(ChangedFiles.Count == 1 ? "one" : "ones")} as \"name (earlier)\"" : null,
-                index > 0 ? $"{(index == 1 ? "the older camera index file goes" : "older camera index files go")} to {ReplacedFolder}" : null,
-            }.OfType<string>());
-            steps.Add($"{Count(Changed, "changed file")} {(Changed == 1 ? "is" : "are")} copied again ({where})");
+            steps.Add($"It copies {Count(Changed, "changed file")} again.");
+            if (ChangedFiles.Count > 0)
+                steps.Add($"{(ChangedFiles.Count == 1 ? "The earlier photo or clip stays" : "The earlier photos and clips stay")} next to the new {(ChangedFiles.Count == 1 ? "one" : "ones")} as \"name (earlier)\".");
+            if (index > 0) steps.Add($"{(index == 1 ? "The older camera index file goes" : "The older camera index files go")} to {ReplacedFolder}.");
         }
-        if (Missing > 0) steps.Add($"{Count(Missing, "file")} no longer in the backup folder (moved out by a sort, or deleted) {(Missing == 1 ? "is" : "are")} copied again from the card");
-        string all = $"then all {Count(cardFiles, "file")} on the card are read again and compared with the backup";
-        return $"Adding to the backup of {when} in {Where}: {string.Join(", ", steps)}; {all}."
+        if (Missing > 0)
+            steps.Add($"{Count(Missing, "file")} {(Missing == 1 ? "is" : "are")} no longer in the backup folder (because of a sort or a deletion). "
+                      + $"It copies {(Missing == 1 ? "this file" : "these files")} again from the card.");
+        steps.Add($"Then it reads all {Count(cardFiles, "file")} on the card again and compares them with the backup.");
+        return $"This backup adds files to the backup from {when} in {Where}. {string.Join(" ", steps)}"
                + (kept.Length > 0 ? $" {Capitalized(kept)}: {(KeptInFolder == 1 ? "it stays" : "they stay")} in the backup." : "");
     }
 
@@ -230,8 +232,8 @@ internal static class EarlierBackups
                     if (!Similar(state, card, out long shift)) continue; // another card (formatted since), or an older backup
                     if (!state.IsEnded)
                     {
-                        refusal = $"{c.Folder} holds an unfinished backup of this card (started {Date(state.Header.Created)}): resume it, or end it, "
-                                  + "before new files can be added to it. Until then a new backup copies the whole card.";
+                        refusal = $"{c.Folder} contains an unfinished backup of this card (started {Date(state.Header.Created)}). Resume it, or end it, "
+                                  + "before you add new files to it. Until then, a new backup copies the whole card.";
                         return null;
                     }
                     newest.Add((c.Folder, state, shift));
@@ -244,7 +246,7 @@ internal static class EarlierBackups
         if (found.Any(f => f is null))
         {
             string none = string.Join(" and ", parents.Where((_, k) => found[k] is null));
-            refusal = $"New files can only be added to an earlier backup that is on every destination, and {none} has none of this card. "
+            refusal = $"You can add new files only to an earlier backup that is on each backup drive. There is no backup of this card in {none}. "
                       + "A new backup copies the whole card.";
             return null;
         }
@@ -252,8 +254,8 @@ internal static class EarlierBackups
         IEnumerable<string> ofThisCardIn(string folder) => Journals(folder).Where(j => JournalReader.TryReadHeader(j) is { Kind: JobKind.Backup } h && SameCard(h, scan.SourceRoot, sourceSerial));
         if (folders.Select(f => f.State.Header.Id).Distinct().Count() > 1)
         {
-            refusal = $"The destinations hold different earlier backups of this card ({string.Join(" and ", folders.Select(f => f.Folder))}), "
-                      + "so new files can't be added to one of them. A new backup copies the whole card.";
+            refusal = $"The backup drives have different earlier backups of this card ({string.Join(" and ", folders.Select(f => f.Folder))}), "
+                      + "so you cannot add new files to one of them. A new backup copies the whole card.";
             return null;
         }
         if (folders.Select(f => f.Folder).Distinct(StringComparer.OrdinalIgnoreCase).Count() < folders.Count) return null; // the same destination twice: said elsewhere
@@ -269,8 +271,8 @@ internal static class EarlierBackups
         foreach ((string rel, EarlierFile e) in earlier)
             if (AscMhl.IsChainFile(rel) && card.TryGetValue(rel, out SourceFile? chain) && (chain.Size != e.Size || chain.LastWriteTime - e.LastWriteTime != common))
             {
-                refusal = $"The card's ASC MHL history ({rel}) changed since it was backed up to {string.Join(" and ", folders.Select(f => f.Folder))} "
-                          + "(another offload added to it), so new files can't be added to that backup. A new backup copies the whole card.";
+                refusal = $"The ASC MHL history of the card ({rel}) changed after the backup to {string.Join(" and ", folders.Select(f => f.Folder))}, "
+                          + "because a different offload added to it. You cannot add new files to that backup. A new backup copies the whole card.";
                 return null;
             }
 
@@ -279,8 +281,8 @@ internal static class EarlierBackups
         foreach (SourceFile f in scan.Files)
             if (AscMhl.IsChainFile(f.RelativePath) && !earlier.ContainsKey(f.RelativePath) && folders.Any(x => File.Exists(Path.Join(x.Folder, f.RelativePath))))
             {
-                refusal = $"The card has an ASC MHL history ({f.RelativePath}) that it did not have when it was backed up to "
-                          + $"{string.Join(" and ", folders.Select(x => x.Folder))} (another offload wrote it), so new files can't be added to that backup. "
+                refusal = $"The card has an ASC MHL history ({f.RelativePath}) that it did not have at the time of the backup to "
+                          + $"{string.Join(" and ", folders.Select(x => x.Folder))}. A different offload wrote it. You cannot add new files to that backup. "
                           + "A new backup copies the whole card.";
                 return null;
             }
@@ -518,27 +520,29 @@ internal static class EarlierBackups
                 if (!whole) continue; // an unfinished backup of fewer files: resuming it would not copy the new ones
                 unfinished.AddRange(job.Select(f => f.State.JournalPath));
                 messages.Add(new PlanMessage(MessageLevel.Warning,
-                    $"This card has an unfinished backup in {where} (started {when}). Resume it instead of starting a new one, unless you want another copy."));
+                    $"This card has an unfinished backup in {where} (started {when}). If you do not want one more copy, resume that backup instead of a new one."));
                 continue;
             }
             var intact = job.Where(f => f.Gone == 0).ToList();
             var lessened = job.Where(f => f.Gone > 0).ToList();
             // Files a sort moved out, or that were deleted: the log alone never counts as a copy.
             string gone = lessened.Count == 0 ? ""
-                : $" {string.Join(" and ", lessened.Select(f => f.Folder))} no longer {(lessened.Count == 1 ? "holds" : "hold")} "
-                  + $"{Count(lessened.Max(f => f.Gone))} of that backup (moved out by a sort, changed or deleted).";
+                : $" {string.Join(" and ", lessened.Select(f => f.Folder))} no longer {(lessened.Count == 1 ? "contains" : "contain")} "
+                  + $"{Count(lessened.Max(f => f.Gone))} of that backup (because of a sort, a change or a deletion).";
             bool allVerified = job.All(f => f.State.Items.Where(i => i.Why != BackupWhy.Kept).All(i => i.Stage == ItemStage.Done));
+            int matched = job.First().Matched;
             if (whole)
                 messages.Add(new PlanMessage(MessageLevel.Warning, !allVerified
-                    ? $"This card was backed up on {when} to {where}, but that backup was ended before every file was copied.{gone} A new backup copies the whole card."
+                    ? $"There is a backup of this card from {when} in {where}, but that backup ended before it copied all files.{gone} A new backup copies the whole card."
                     : intact.Count > 0
-                        ? $"This card was already backed up on {when}: {string.Join(" and ", intact.Select(f => f.Folder))} {(intact.Count == 1 ? "holds" : "hold")} "
-                          + $"the same {Count(files)} (same names, sizes and dates), all verified then.{gone} A new backup makes another copy."
-                        : $"This card was backed up on {when} to {where}, but not all of it is there any more:{gone} A new backup copies the whole card."));
+                        ? $"There is already a backup of this card from {when}. {string.Join(" and ", intact.Select(f => f.Folder))} {(intact.Count == 1 ? "contains" : "contain")} "
+                          + $"the same {Count(files)} (same names, sizes and dates). That backup checked all of them.{gone} A new backup makes one more copy."
+                        : $"There is a backup of this card from {when} in {where}, but not all of it is there now:{gone} A new backup copies the whole card."));
             else
                 messages.Add(new PlanMessage(lessened.Count > 0 ? MessageLevel.Warning : MessageLevel.Info,
-                    $"{job.First().Matched:N0} of the card's {Count(files)} {(allVerified ? "were already backed up" : "were in a backup that was ended early")} on {when} to {where}.{gone} "
-                    + $"The card has {Count(files - job.First().Matched)} that {(files - job.First().Matched == 1 ? "is" : "are")} not in that backup; this backup copies the whole card."));
+                    $"{matched:N0} of the {Count(files)} on the card {(matched == 1 ? "is" : "are")} "
+                    + $"{(allVerified ? "already in a backup" : "in a backup that ended early")} from {when} in {where}.{gone} "
+                    + $"The card has {Count(files - matched)} that {(files - matched == 1 ? "is" : "are")} not in that backup. This backup copies the whole card."));
         }
         return messages;
     }

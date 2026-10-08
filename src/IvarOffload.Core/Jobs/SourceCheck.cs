@@ -23,16 +23,16 @@ public sealed record LeftFile(string Rel, long Size, string? CountAs, string Rea
 /// </summary>
 public sealed class SourceCheck
 {
-    public const string ClashReason = "a DIFFERENT file with the same name is already in the target";
-    public const string NotInThisSort = "not part of this sort (new since the preview?) - it can move now";
+    public const string ClashReason = "a DIFFERENT file with the same name is already in the target folder";
+    public const string NotInThisSort = "not part of this sort (new after the preview?) but ready to move now";
     /// <summary>A video (or photo) that is only a cloud placeholder: it cannot be read, so it did not move.</summary>
     public const string OnlineOnlyReason = "online-only (not downloaded), so not moved";
     /// <summary>A video (or photo) that is a link (shortcut): links are never followed, so it did not move.</summary>
-    public const string LinkReason = "a link (shortcut) - not followed, so not moved; what it points to may need moving by hand";
+    public const string LinkReason = "a link (shortcut), not moved because the sort does not follow links. If necessary, move the file that the link points to manually";
     /// <summary>A video (or photo) inside an editing or processing project: it stays so the project keeps its media.</summary>
-    public const string InProjectReason = "inside an editing/processing project - stays so the project keeps its media";
+    public const string InProjectReason = "inside an editing/processing project (the sort does not move media that a project uses)";
     /// <summary>A file an earlier sort of the same folder planned to move and did not (it was ended early, or the file was skipped).</summary>
-    public const string EarlierJobReason = "left in the source by an earlier sort of this folder";
+    public const string EarlierJobReason = "still in the source folder after an earlier sort of this folder";
     /// <summary>The status of a file the preview kept in the source (as the job's reports call it).</summary>
     public const string HeldBackStatus = "held back";
 
@@ -76,13 +76,13 @@ public sealed class SourceCheck
     /// <summary>What the fresh scan found that is not in the job's own record (see <see cref="LeftFile.FromRescan"/>).</summary>
     public IEnumerable<LeftFile> FoundAgain => Left.Where(f => f.FromRescan);
 
-    /// <summary>"2 folders could not be read (DCIM\101MEDIA, Private)", for the result card.</summary>
+    /// <summary>"the scan could not read 2 folders (DCIM\101MEDIA, Private)", for the result card.</summary>
     public string UnreadableText
     {
         get
         {
             var names = Unreadable.Select(p => p.Split(": ", 2)[0]).Select(n => n == "(source folder)" ? "the source folder itself" : n).ToList();
-            return $"{Format.Count(names.Count, "folder")} could not be read ({string.Join(", ", names.Take(3))}{(names.Count > 3 ? ", ..." : "")})";
+            return $"the scan could not read {Format.Count(names.Count, "folder")} ({string.Join(", ", names.Take(3))}{(names.Count > 3 ? ", ..." : "")})";
         }
     }
 
@@ -104,7 +104,7 @@ public sealed class SourceCheck
             return new SourceCheck
             {
                 Left = left, Missing = MissingFrom(job), KeptCopies = KeptCopiesOf(job),
-                NotChecked = notChecked ?? "the source was not scanned again", MemoryCard = memoryCard,
+                NotChecked = notChecked ?? "there was no new scan of the source folder", MemoryCard = memoryCard,
             };
 
         var seen = new HashSet<string>(left.Select(f => f.Rel), StringComparer.OrdinalIgnoreCase);
@@ -117,8 +117,8 @@ public sealed class SourceCheck
             if (f.Note is FileNote.DifferentInTarget or FileNote.HeldWithGroup)
                 left.Add(new LeftFile(f.RelativePath, f.Size, countAs, ClashReason, f.Reason, HeldBackStatus, FromRescan: true));
             else if (leftBefore.TryGetValue(f.RelativePath, out var before))
-                left.Add(new LeftFile(f.RelativePath, f.Size, countAs, EarlierJobReason + " - it can move now",
-                    Earlier(before.Item, before.Job) + " - it can move now", "not moved", FromRescan: true));
+                left.Add(new LeftFile(f.RelativePath, f.Size, countAs, EarlierJobReason + ", but ready to move now",
+                    Earlier(before.Item, before.Job) + ". It can move now", "not moved", FromRescan: true));
             else
                 left.Add(new LeftFile(f.RelativePath, f.Size, countAs, NotInThisSort, NotInThisSort, "not in this sort", FromRescan: true));
         }
@@ -141,7 +141,7 @@ public sealed class SourceCheck
         foreach ((SourceFile f, JobItem item, JobState from) in leftBefore.Values)
             if (seen.Add(f.RelativePath))
                 left.Add(new LeftFile(f.RelativePath, f.Size, MediaRules.CountKey(f.RelativePath, mode), EarlierJobReason,
-                    $"{Earlier(item, from)}; now: {f.Reason}", "not moved", FromRescan: true));
+                    $"{Earlier(item, from)}. Now: {f.Reason}", "not moved", FromRescan: true));
 
         return new SourceCheck
         {
@@ -177,7 +177,7 @@ public sealed class SourceCheck
         JobHeader h = job.Header;
         try
         {
-            if (!Directory.Exists(h.Source)) return (ForSort(job, null, "the source folder can't be reached", memoryCard: memoryCard), null);
+            if (!Directory.Exists(h.Source)) return (ForSort(job, null, "the source folder is not available", memoryCard: memoryCard), null);
             List<JobState> earlier = Leftovers.EarlierSorts(h.Source, h.Target, h.Mode, except: job.JournalPath);
             MovePlan fresh = Planner.Build(Scanner.Scan(h.Source, progress, ct, h.Target), h.Target, h.Mode, h.Verify);
             MovePlan plan = Leftovers.Include(fresh, [job, .. earlier], Leftovers.InTarget(fresh.TargetRoot));
@@ -185,7 +185,7 @@ public sealed class SourceCheck
         }
         catch (OperationCanceledException)
         {
-            return (ForSort(job, null, "the check was stopped", memoryCard: memoryCard), null);
+            return (ForSort(job, null, "the check stopped before the end", memoryCard: memoryCard), null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -245,7 +245,7 @@ public sealed class SourceCheck
     private static List<string> KeptCopiesOf(JobState job) =>
         job.Items.Where(i => i.SetAside is not null && i.Stage != ItemStage.Done).Select(i => i.SetAside!).ToList();
 
-    /// <summary>"not moved - the job was ended early (sort of 26 Sep 15:42)".</summary>
+    /// <summary>"not moved because you ended the job early (sort of 26 Sep 15:42)".</summary>
     private static string Earlier(JobItem item, JobState job) => $"{LeftReasons.Reason(item)} (sort of {Format.JobDate(job.Header.Created)})";
 }
 
@@ -258,41 +258,46 @@ public static partial class LeftReasons
         string? note = item.Note;
         if (item.IsMissing) return MissingReason(item, undo: false);
         if (note == FailReasons.OriginalNotChecked)
-            return "verified copy is in the target; the original could not be checked (the source was not there when the job was ended), so it was kept";
+            return "a checked copy is in the target folder, but the job could not check the original and did not delete it "
+                + "(the source folder was not available when you ended the job)";
         if (FailReasons.IsMadeBy(note, FailReasons.UnfinishedCopyKept))
-            return $"not moved - the job was ended while it was being copied and the source was not there; the unfinished copy was kept in the target ({JobPaths.UnverifiedCopySuffix})";
+            return "not moved because you ended the job during the copy, when the source folder was not available. "
+                + $"The job kept the unfinished copy in the target folder ({JobPaths.UnverifiedCopySuffix})";
         if (FailReasons.IsMadeBy(note, FailReasons.VerifiedCopyKeptNotChecked))
-            return "not moved - the job was ended while the source was not there, and a file with its name is in the target; its verified copy was kept "
-                + $"in the target ({JobPaths.VerifiedCopySuffix})";
+            return "not moved because you ended the job when the source folder was not available. A file with the same name is in the target folder, "
+                + $"so the job kept the checked copy there ({JobPaths.VerifiedCopySuffix})";
         if (FailReasons.IsMadeBy(note, FailReasons.DamagedCopyKeptNotChecked))
-            return "not moved - the job was ended while the source was not there, and its copy does not match the checksum; the copy was kept in the "
-                + $"target ({JobPaths.DamagedCopySuffix})";
-        if (item.Failed && item.Stage == ItemStage.Placed) return "verified copy is in the target; original kept";
+            return "not moved because you ended the job when the source folder was not available. The copy does not match the checksum, "
+                + $"and the job kept it in the target folder ({JobPaths.DamagedCopySuffix})";
+        if (item.Failed && item.Stage == ItemStage.Placed) return PlacedText;
         if (item.Failed)
         {
-            if (FailReasons.IsWaiting(note)) return "waiting for another file of its clip, which could not be moved yet";
-            if (FailReasons.IsDeviceError(note)) return "the drive stopped responding while it was being moved";
-            return "could not be moved: " + Plain(note ?? "unknown error");
+            if (FailReasons.IsWaiting(note)) return "on hold because another file of the same clip could not move yet";
+            if (FailReasons.IsDeviceError(note)) return "the drive did not respond during the move";
+            return "could not move: " + Plain(note ?? "unknown error");
         }
         if (item.Stage == ItemStage.Skipped)
-            return note switch
+            return SkipReasons.Current(note) switch
             {
                 SkipReasons.DifferentInTarget => SourceCheck.ClashReason,
-                SkipReasons.SameNameAndSizeInTarget => "a file with the same name and size, but another date, is already in the target",
-                SkipReasons.FolderInTarget => "a folder with the same name is in the target",
-                SkipReasons.AppearedDuringMove or SkipReasons.AppearedDuringCopy => "a file with the same name appeared in the target during the move",
+                SkipReasons.SameNameAndSizeInTarget => "a file with the same name and size, but a different date, is already in the target folder",
+                SkipReasons.FolderInTarget => "a folder with the same name is in the target folder",
+                SkipReasons.AppearedDuringMove or SkipReasons.AppearedDuringCopy => "a file with the same name appeared in the target folder during the move",
                 SkipReasons.ChangedAfterPreview => "changed after the preview",
-                SkipReasons.ChangedDuringMove => "changed while it was being moved",
-                SkipReasons.SourceGone => "no longer in the source (removed by something else)",
-                SkipReasons.Closed => "not moved - the job was ended early",
-                SkipReasons.ChangedSinceSorted => "changed since the sort - left where it is",
-                SkipReasons.NotInSortedFolder => "no longer in the sorted folder (moved, renamed or deleted since the sort)",
-                SkipReasons.AlreadyBackDifferent or SkipReasons.AlreadyBackSameSize => "a different file is now in its original place - both kept",
-                _ when SkipReasons.IsKeptWithGroup(note) => "kept with another file of its clip, which was not moved",
-                _ => note ?? "skipped",
+                SkipReasons.ChangedDuringMove => "changed during the move",
+                SkipReasons.SourceGone => "no longer in the source folder (something else removed the file)",
+                SkipReasons.Closed => SkipReasons.Closed,
+                SkipReasons.ChangedSinceSorted => SkipReasons.ChangedSinceSorted,
+                SkipReasons.NotInSortedFolder => SkipReasons.NotInSortedFolder,
+                SkipReasons.AlreadyBackDifferent or SkipReasons.AlreadyBackSameSize => "a different file is now in its original place (the undo kept both files)",
+                _ when SkipReasons.IsKeptWithGroup(note) => "kept with another file of its clip, which did not move",
+                var current => current ?? "skipped",
             };
-        return item.Stage == ItemStage.Pending ? "not moved yet" : "interrupted - Resume finishes it";
+        return item.Stage == ItemStage.Pending ? "not moved yet" : "interrupted (Resume finishes the move)";
     }
+
+    /// <summary>A file with a checked copy in the target whose original did not leave the source.</summary>
+    private const string PlacedText = "a checked copy is in the target folder, and the original is still in the source folder";
 
     /// <summary>
     /// Why a planned file that disappeared from the source (<see cref="JobItem.IsMissing"/>) did not move, and what is
@@ -301,28 +306,28 @@ public static partial class LeftReasons
     public static string MissingReason(JobItem item, bool undo)
     {
         string from = MissingFromText(undo);
-        string target = undo ? "the original folder" : "the target";
+        string target = undo ? "the source folder" : "the target folder";
         string? note = item.Note;
         return note switch
         {
-            FailReasons.InNeitherPlace => $"{from} - the move was interrupted, and it is not in {target} either",
-            FailReasons.CopyAndOriginalGone => $"{from} - its copy was interrupted, and no copy is in {target}",
-            FailReasons.PlacedCopyDamagedOriginalGone => $"{from} - its copy in {target} does not match the checksum (kept - please check it)",
+            FailReasons.InNeitherPlace => $"{from}. The move did not finish, and the file is not in {target} either",
+            FailReasons.CopyAndOriginalGone => $"{from}. The copy did not finish, and no copy is in {target}",
+            FailReasons.PlacedCopyDamagedOriginalGone => $"{from}. The copy in {target} does not match the checksum, and the job kept it. Check the copy",
             _ when FailReasons.IsMadeBy(note, FailReasons.OriginalGoneDuringCopy) =>
-                $"{from} while it was being copied - the unchecked copy was kept in {target} ({JobPaths.UnverifiedCopySuffix})",
+                $"{from} during the copy. The job kept the unchecked copy in {target} ({JobPaths.UnverifiedCopySuffix})",
             _ when FailReasons.IsMadeBy(note, FailReasons.ChangedCopyKept) =>
-                $"{from} while it was being copied, and it had changed since the sort - its copy was kept in {target} ({JobPaths.UnverifiedCopySuffix})",
+                $"{from} during the copy. The file also changed after the sort. The job kept the copy in {target} ({JobPaths.UnverifiedCopySuffix})",
             _ when FailReasons.IsMadeBy(note, FailReasons.VerifiedCopyKept) =>
-                $"{from} - its verified copy was kept in {target} under another name ({JobPaths.VerifiedCopySuffix}), because a file with its name is there",
+                $"{from}. A file with the same name is in {target}, so the job kept the checked copy there under a different name ({JobPaths.VerifiedCopySuffix})",
             _ when FailReasons.IsMadeBy(note, FailReasons.DamagedCopyKept) =>
-                $"{from} - its copy does not match the checksum and was kept in {target} ({JobPaths.DamagedCopySuffix})",
-            _ when item.SetAside is not null => $"{from} - a copy was kept in {target} under another name",
-            _ => $"{from} - not in {target} either",
+                $"{from}. The copy does not match the checksum, and the job kept it in {target} ({JobPaths.DamagedCopySuffix})",
+            _ when item.SetAside is not null => $"{from}. The job kept a copy in {target} under a different name",
+            _ => $"{from}. The file is not in {target} either",
         };
     }
 
-    /// <summary>"missing from the source (removed by something else)".</summary>
-    public static string MissingFromText(bool undo) => $"missing from {(undo ? "the sorted folder" : "the source")} (removed by something else)";
+    /// <summary>"missing from the source folder (something else removed the file)".</summary>
+    public static string MissingFromText(bool undo) => $"missing from {(undo ? "the target folder" : "the source folder")} (something else removed the file)";
 
     /// <summary>
     /// The Status column of the list of what a job left: the job's reports' status (<see cref="JobReports.Status"/>) in
@@ -330,7 +335,7 @@ public static partial class LeftReasons
     /// </summary>
     public static string StatusText(JobItem item, bool undo) => JobReports.Status(item) switch
     {
-        "missing" => undo ? "missing from the sorted folder" : "missing from the source",
+        "missing" => undo ? "missing from the target folder" : "missing from the source folder",
         "copied, original kept" when item.Note == FailReasons.OriginalNotChecked => "copied, original not checked",
         var status => status,
     };
@@ -338,7 +343,7 @@ public static partial class LeftReasons
     /// <summary>Why this file did not move: the full message of a failed file, else its reason.</summary>
     public static string Detail(JobItem item) =>
         item.Failed && item.Note is { Length: > 0 } note
-            ? (item.Stage == ItemStage.Placed && note != FailReasons.OriginalNotChecked ? "verified copy is in the target; original kept - " : "") + note
+            ? (item.Stage == ItemStage.Placed && note != FailReasons.OriginalNotChecked ? PlacedText + ". " : "") + note
             : Reason(item);
 
     /// <summary>A failure message without file paths or error numbers, so the same problem on many files reads as one reason.</summary>

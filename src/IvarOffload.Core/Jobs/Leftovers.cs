@@ -64,16 +64,18 @@ public static class Leftovers
             Attributes = x.File.Attributes,
             Side = side,
             Role = x.File.Role,
-            Reason = $"{(x.Item.Why.Length > 0 ? x.Item.Why : "planned to move")} - left behind by an earlier sort of this folder "
-                + $"({Format.JobDate(x.Job.Header.Created)}), moves now",
+            Reason = $"{(x.Item.Why.Length > 0 ? x.Item.Why : "planned to move")} - moves now: an earlier sort of this folder "
+                + $"({Format.JobDate(x.Job.Header.Created)}) did not move it",
             GroupKey = x.Item.Group.Length > 0 ? x.Item.Group : x.File.GroupKey,
         }).ToList();
         var taken = new HashSet<SourceFile>(add.Select(x => x.File));
         List<string> folders = added.Select(f => f.Directory.Length > 0 ? f.Directory : "(source folder)").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        bool one = added.Count == 1;
         var message = new PlanMessage(MessageLevel.Info,
-            $"{Format.Count(added.Count, "file")} that an earlier sort of this folder planned to move and left behind "
-            + $"{(added.Count == 1 ? "moves" : "move")} now, although on {(added.Count == 1 ? "its" : "their")} own {(added.Count == 1 ? "it" : "they")} would stay "
-            + $"(for example the last frames of a clip whose other frames already moved): {string.Join(", ", folders.Take(3))}{(folders.Count > 3 ? ", ..." : "")}.");
+            $"An earlier sort of this folder planned to move {Format.Count(added.Count, "file")}, but did not move {(one ? "it" : "them")}. "
+            + $"{(one ? "It moves" : "They move")} now: {string.Join(", ", folders.Take(3))}{(folders.Count > 3 ? ", ..." : "")}. "
+            + $"Without the log of the earlier sort, {(one ? "this file stays" : "these files stay")} "
+            + "(for example the last frames of a clip whose other frames already moved).");
 
         // The totals and the messages that depend on what moves are worked out again, so the preview never says the
         // added files stay while Confirm and the move list take them.
@@ -161,8 +163,8 @@ public static class Leftovers
 
     // ---- As Planner.Summaries words them ----------------------------------------------------------------------------
 
-    private const string SplitMarker = " will be split - files next to your ";
-    private const string AudioMarker = " with no matching photo ";
+    private const string SplitMarker = " folder(s): files next to your ";
+    private const string AudioMarker = " have no photo of the same name, so they ";
 
     /// <summary>The Planner's warning about folders that will be split (the app keeps it among the few it always shows).</summary>
     public static bool IsSplitMessage(PlanMessage m) => m.Level == MessageLevel.Warning && m.Text.Contains(SplitMarker, StringComparison.Ordinal);
@@ -190,16 +192,16 @@ public static class Leftovers
         if (split.Count == 0) return null;
         var worst = split.OrderByDescending(p => p.Value.Count).ThenBy(p => p.Key, StringComparer.OrdinalIgnoreCase).ToList();
         return new PlanMessage(MessageLevel.Warning,
-            $"{split.Count:N0} folder(s){SplitMarker}{Planner.Word(mode)} stay behind (e.g. "
+            $"The sort will split {split.Count:N0}{SplitMarker}{Planner.Word(mode)} stay in the source folder (for example "
             + string.Join("; ", worst.Take(3).Select(p => $"{Display(p.Key)}: {ExtensionCounts(p.Value, 4)}"))
-            + (split.Count > 3 ? "; ..." : "") + "). They may belong to the files that move - check them before deleting or formatting the source.");
+            + (split.Count > 3 ? "; ..." : "") + "). They can belong to the files that move. Check them before you delete the source folder or format its drive.");
     }
 
     /// <summary>Audio recordings with no matching photo: they go with the videos, or stay as video sound.</summary>
     private static PlanMessage? AudioMessage(List<SourceFile> audio, MoveMode mode) => audio.Count == 0 ? null
         : new PlanMessage(MessageLevel.Info,
             $"{audio.Count:N0} audio recording(s) ({Format.Bytes(audio.Sum(f => f.Size))}){AudioMarker}"
-            + (mode == MoveMode.Videos ? "go with the videos" : "count as video sound and stay") + ": " + FolderExamples(audio, 3) + ".");
+            + (mode == MoveMode.Videos ? "go with the videos" : "stay with the videos as video sound") + ": " + FolderExamples(audio, 3) + ".");
 
     private static string Describe(SourceFile f) => f.Note switch
     {
@@ -213,8 +215,8 @@ public static class Leftovers
         FileNote.FollowsByName => "Unrecognized, follows video",
         FileNote.LivePhoto => "Live Photo clip",
         FileNote.InProject => "Inside a project",
-        FileNote.DifferentInTarget => "Name taken in target (different)",
-        FileNote.HeldWithGroup => "Held with its clip",
+        FileNote.DifferentInTarget => "Name taken in target folder (different)",
+        FileNote.HeldWithGroup => "Kept with its clip",
         _ => (f.Side, f.Role) switch
         {
             (MediaSide.Video, FileRole.Primary) => "Video",

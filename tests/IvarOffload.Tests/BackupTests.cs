@@ -136,7 +136,7 @@ public class BackupTests
         Assert.All(result.Destinations, d =>
         {
             Assert.False(d.MhlWritten);
-            Assert.Contains("can't be read", d.MhlSkipped);
+            Assert.Contains("cannot read the card's own ASC MHL history", d.MhlSkipped);
         });
         for (int k = 0; k < 2; k++)
         {
@@ -453,7 +453,7 @@ public class BackupTests
         var parents = t.Parents.Take(2).ToList();
         BackupPlan wrong = BackupPlanner.Build(BackupScanner.Scan(other.Card), parents, BackupTree.Name);
         Assert.DoesNotContain(wrong.Messages, m => m.Text.Contains("of this card"));
-        Assert.Contains(wrong.Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("unfinished backup of another card"));
+        Assert.Contains(wrong.Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("unfinished backup of a different card"));
     }
 
     [Fact]
@@ -524,7 +524,7 @@ public class BackupTests
         BackupResult resumed = BackupTree.Resume(t.Journal(0));
         Assert.True(resumed.Destinations[0].Complete(resumed.Files));
         t.AssertExactCopy(0, card);
-        Assert.Contains("can't be read", resumed.Destinations[1].Problem);
+        Assert.Contains("It is not possible to read the log", resumed.Destinations[1].Problem);
         Assert.False(resumed.AllVerified);
     }
 
@@ -564,10 +564,10 @@ public class BackupTests
         using var t = new BackupTree();
         t.TypicalCard();
         BackupScan scan = BackupScanner.Scan(t.Card);
-        Assert.Contains(BackupPlanner.Build(scan, [t.Card], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("inside the folder being backed up"));
-        Assert.Contains(BackupPlanner.Build(scan, [Path.Join(t.Card, "DCIM")], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("inside the folder"));
-        Assert.Contains(BackupPlanner.Build(scan, [t.Parents[0], t.Parents[0] + "\\"], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("chosen twice"));
-        Assert.Contains(BackupPlanner.Build(scan, [.. t.Parents, Path.Join(t.Root, "D4")], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("at most 3"));
+        Assert.Contains(BackupPlanner.Build(scan, [t.Card], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("is in the folder that you back up"));
+        Assert.Contains(BackupPlanner.Build(scan, [Path.Join(t.Card, "DCIM")], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("in the folder that you back up"));
+        Assert.Contains(BackupPlanner.Build(scan, [t.Parents[0], t.Parents[0] + "\\"], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("same backup folder two times"));
+        Assert.Contains(BackupPlanner.Build(scan, [.. t.Parents, Path.Join(t.Root, "D4")], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("a maximum of 3"));
         Assert.Contains(BackupPlanner.Build(scan, [], "x").Messages, m => m.Level == MessageLevel.Error);
         Assert.Contains(BackupPlanner.Build(scan, [t.Parents[0] + "," + t.Parents[1]], "x").Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("not valid"));
         // Two destinations on one drive: a warning that they are not separate copies.
@@ -613,7 +613,7 @@ public class BackupTests
         var env = new PlanEnvironment { VolumeOf = _ => card, ClusterSizeOf = _ => 4096, SyncOf = _ => null, TestCard = "Z: TEST_CARD" };
         BackupPlan plan = BackupPlanner.Build(BackupScanner.Scan(t.Card), [t.Parents[0]], "x", true, env);
         Assert.True(plan.IsCard);
-        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("on the card itself"));
+        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Error && m.Text.Contains("is on the card that you back up"));
     }
 }
 

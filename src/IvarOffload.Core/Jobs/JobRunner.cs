@@ -172,8 +172,8 @@ public sealed class JobRunner : IDisposable
         try
         {
             if (!state.PlanComplete)
-                throw new JournalException("This job was never started (its plan was not completely written), so no files were moved. Start a new preview instead.");
-            if (state.IsEnded) throw new JournalException("This job has already finished.");
+                throw new JournalException("This job never started: its log does not contain the complete plan. No files moved. Start a new preview instead.");
+            if (state.IsEnded) throw new JournalException("This job is already finished.");
             // A backup never deletes anything; the sort engine, which removes originals, must never run one.
             if (state.IsBackup) throw new JournalException("This is the log of a backup, not of a sort. Open it in the Backup tab.");
         }
@@ -374,8 +374,8 @@ public sealed class JobRunner : IDisposable
             if (here is not null && Drives.Elsewhere(Drives.OnDrive(_job.Target, _job.TargetReal), _job.TargetSerial, here).Any(p => JobPaths.SamePath(p, here)))
                 throw new JobHaltException(HaltReason.LogMoved, LetterChanged("target", _job.TargetLabel, _job.Target, here));
             throw new JobHaltException(HaltReason.LogMoved,
-                $"This job was started in {_job.Target}, but its log is now in {here ?? Path.GetDirectoryName(Path.GetFullPath(_state.JournalPath))}. "
-                + "Put the folder back (or rename it back), then resume.");
+                $"This job started in {_job.Target}, but its log is now in {here ?? Path.GetDirectoryName(Path.GetFullPath(_state.JournalPath))}. "
+                + "Move the folder to where it was, or give it its old name again. Then resume the job.");
         }
         if (_closing)
         {
@@ -404,13 +404,13 @@ public sealed class JobRunner : IDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            throw new JobHaltException(reason, $"The {side} folder cannot be read ({e.Message}). Fix the problem, then press Resume. Nothing was lost.");
+            throw new JobHaltException(reason, $"The {side} folder is not readable ({e.Message}). Fix the problem. Then click Resume. Nothing was lost.");
         }
         // A folder named through a subst drive letter that now stands for another folder is another folder.
         if (present && !Drives.LeadsTo(root, real))
             throw new JobHaltException(reason,
-                $"The {side} {root} was reached through the subst drive letter {Drives.Letter(root)}, which now stands for another folder. When the job was made, "
-                + $"it was {real}. Give the letter its folder back (subst), then press Resume. Nothing was lost.");
+                $"The {side} folder {root} is on the subst drive letter {Drives.Letter(root)}, which now shows a different folder. "
+                + $"When the job started, {Drives.Letter(root)} showed {real}. Use subst to give {Drives.Letter(root)} its old folder again. Then click Resume. Nothing was lost.");
         uint now = serial == 0 || !present ? 0 : Drives.SerialOf(root);
         if (present && (now == 0 || now == serial)) return;
         // The same drive under another letter (another PC, or another plug order): say so, the job cannot follow it.
@@ -418,19 +418,26 @@ public sealed class JobRunner : IDisposable
             throw new JobHaltException(reason, LetterChanged(side, label, root, moved));
         // The drive is there (the same one, as far as it can tell): only the folder is gone. Never say "not connected" then.
         if (!present && Drives.IsOn(root, serial)) throw new JobHaltException(reason, FolderGone(side, root, label));
-        throw new JobHaltException(reason, $"The {side} ({DriveWas(root, label)}) is not connected or was renamed: {root}. Reconnect it and press Resume. Nothing was lost.");
+        throw new JobHaltException(reason, NotConnected(side, root, label));
     }
+
+    private static string NotConnected(string side, string root, string label) =>
+        $"The {DriveOf(side)} ({DriveWas(root, label)}) is not connected, or the {side} folder {root} has a new name. "
+        + "Connect the drive again. Then click Resume. Nothing was lost.";
 
     private static string FolderGone(string side, string root, string label) =>
         $"The {side} folder is missing: {root}. Its drive ({(label.Length > 0 ? $"{label}, {Drives.Letter(root)}" : Drives.Letter(root))}) is connected, "
-        + "so the folder was probably renamed, moved or deleted. Put it back (or rename it back), then press Resume. Nothing was lost.";
+        + "so someone probably renamed, moved or deleted the folder. Move the folder to where it was, or give it its old name again. Then click Resume. Nothing was lost.";
 
-    /// <summary>"SONY_A was F:", or "drive F:" when the drive has no label.</summary>
-    private static string DriveWas(string root, string label) => label.Length > 0 ? $"{label} was {Drives.Letter(root)}" : $"drive {Drives.Letter(root)}";
+    /// <summary>"the backup drive", or "the card" (a card is a drive of its own).</summary>
+    private static string DriveOf(string side) => side == "card" ? "card" : $"{side} drive";
+
+    /// <summary>"SONY_A was F:", or "F:" when the drive has no label.</summary>
+    private static string DriveWas(string root, string label) => label.Length > 0 ? $"{label} was {Drives.Letter(root)}" : Drives.Letter(root);
 
     private static string LetterChanged(string side, string label, string was, string now) =>
-        $"The {side} drive{(label.Length > 0 ? $" ({label})" : "")} has another letter now: {was} is now {now}. "
-        + $"Give the drive its old letter {Drives.Letter(was)} back (Windows Disk Management > Change Drive Letter), then press Resume. Nothing was lost.";
+        $"The {DriveOf(side)}{(label.Length > 0 ? $" ({label})" : "")} has a different letter now: {was} is now {now}. "
+        + $"In Windows Disk Management, use Change Drive Letter to give the drive its old letter ({Drives.Letter(was)}) again. Then click Resume. Nothing was lost.";
 
     /// <summary>A pause in the middle of a file: check both drives again before the next step that changes anything.</summary>
     private void CheckRootsIfPaused()
@@ -506,8 +513,8 @@ public sealed class JobRunner : IDisposable
         if (again || _closing) return;
         string which = e is Win32IOException { Path: var path } ? SideOf(path) : "";
         throw new JobHaltException(HaltReason.DriveStoppedResponding,
-            $"The {(which.Length > 0 ? which : "card or drive")} stopped responding ({detail}). "
-            + "Check that it is connected (cable, port or card reader), then press Resume. Nothing was lost.");
+            $"The {(which.Length > 0 ? which : "card or drive")} did not respond ({detail}). "
+            + "Make sure that it is connected (cable, port or card reader). Then click Resume. Nothing was lost.");
     }
 
     private string SideOf(string path) =>
@@ -524,7 +531,7 @@ public sealed class JobRunner : IDisposable
             return;
         }
         Fail(item, e.Message);
-        throw new JobHaltException(HaltReason.TargetFull, "The target drive is full. Free up space, then resume the job. Nothing was lost.");
+        throw new JobHaltException(HaltReason.TargetFull, "The target drive is full. Make more space available on it. Then resume the job. Nothing was lost.");
     }
 
     // ---- Starting a file ------------------------------------------------------------------------------------
@@ -539,7 +546,7 @@ public sealed class JobRunner : IDisposable
             if (!SafeFile.Exists(src) && SafeFile.DirectoryExists(Path.GetDirectoryName(src)!)) SourceVanished(item, src, dst);
             return;
         }
-        SetPhase("Checking");
+        SetPhase("File check in progress");
         FileSnapshot? source = SafeFile.TrySnapshot(src);
         if (source is null && _undo)
         {
@@ -593,7 +600,7 @@ public sealed class JobRunner : IDisposable
         if (existing.IsDirectory) return SkipReasons.FolderInTarget;
         if (existing.Size != item.Size) return _undo ? SkipReasons.AlreadyBackDifferent : SkipReasons.DifferentInTarget;
         if (!_job.Verify) return _undo ? SkipReasons.AlreadyBackSameSize : SkipReasons.SameNameAndSizeInTarget;
-        SetPhase("Comparing with the file already in the target");
+        SetPhase("Comparison with the file in the target folder");
         string dst = Path.Join(_job.Target, item.Rel);
         bool identical = Hash(src, item.Size, countWork: false) == Hash(dst, existing.Size, countWork: false);
         return identical
@@ -605,7 +612,7 @@ public sealed class JobRunner : IDisposable
 
     private void MoveByRename(JobItem item, string src, string dst)
     {
-        SetPhase(_job.Verify ? "Checksumming" : "Moving");
+        SetPhase(_job.Verify ? "Checksum in progress" : "Move in progress");
         FileSnapshot before;
         string? sha;
         try
@@ -645,7 +652,7 @@ public sealed class JobRunner : IDisposable
         Fault("after-pre", item);
 
         EnsureFolder(Path.GetDirectoryName(dst)!);
-        SetPhase("Moving");
+        SetPhase("Move in progress");
         int error;
         try
         {
@@ -673,19 +680,19 @@ public sealed class JobRunner : IDisposable
             if (SourceFolderMissing(item, src)) return;
             CheckRoots();
         }
-        if (error != 0) throw new Win32IOException(error, "Moving", src);
+        if (error != 0) throw new Win32IOException(error, "The move", src);
         Fault("after-rename", item);
 
-        FileSnapshot after = SafeFile.TrySnapshot(dst) ?? throw new IOException("The file was not found in the target right after moving it.");
+        FileSnapshot after = SafeFile.TrySnapshot(dst) ?? throw new IOException("The file is not in the target folder right after the move.");
         if (fileId is not null && after.FileId != fileId)
-            throw new IOException("Verification failed: the file in the target is not the file that was moved.");
+            throw new IOException("Check failed: the file in the target folder is not the file that the job moved.");
         if (after.Size != before.Size || after.LastWriteTime != before.LastWriteTime)
-            throw new IOException("Verification failed: size or modification time differs after the move.");
+            throw new IOException("Check failed: the size or the modification time is different after the move.");
         if (after.CreationTime != before.CreationTime)
             SafeFile.ApplyTimesAndAttributes(dst, before); // NTFS name tunnelling can substitute an old creation time
         else if (!SameAttributes(after, attributes))
             TryRestoreAttributes(dst, before);
-        if (SafeFile.Exists(src)) throw new IOException("The source file still exists after moving it.");
+        if (SafeFile.Exists(src)) throw new IOException("The source file is still there after the move.");
         Done(item, "rename");
     }
 
@@ -726,7 +733,7 @@ public sealed class JobRunner : IDisposable
             Fail(item, FailReasons.InNeitherPlace);
             return;
         }
-        Fail(item, "Interrupted move: the file exists in both the source and the target. Both were left untouched - please check them.");
+        Fail(item, "Interrupted move: the file is in the source folder and in the target folder. The job did not change either file. Check the two files.");
     }
 
     /// <summary>An interrupted rename: the file is in the target now. Recorded as moved if it is the file that was being moved.</summary>
@@ -736,7 +743,7 @@ public sealed class JobRunner : IDisposable
         bool same = d.Size == item.Size && d.LastWriteTime == lastWrite && (item.FileId is null || d.FileId == item.FileId);
         if (!same)
         {
-            Fail(item, "Interrupted move: the file in the target is not the file that was being moved. Nothing was changed - please check it.");
+            Fail(item, "Interrupted move: the file in the target folder is not the file that the job started to move. The job changed nothing. Check the file.");
             return;
         }
         // The attributes the file had before the rename, when the log recorded them (a rename sets Archive).
@@ -765,7 +772,7 @@ public sealed class JobRunner : IDisposable
             FileSnapshot source;
             string sha;
             var streams = new List<(NamedStream Stream, string Sha)>();
-            SetPhase("Copying");
+            SetPhase("Copy in progress");
             SafeFileHandle handle;
             try
             {
@@ -834,7 +841,7 @@ public sealed class JobRunner : IDisposable
             Fault("after-copy", item);
 
             // Read the copy back from the target and the original a second time from the source, at the same time.
-            SetPhase("Verifying");
+            SetPhase("Copy check in progress");
             ReadBack check;
             bool streamsMatch;
             try
@@ -949,23 +956,23 @@ public sealed class JobRunner : IDisposable
         // Closing only finishes what was in flight: it records the file and goes on, so the job can always be ended.
         if (!_closing && ++_sourceMismatches >= 2)
             throw new JobHaltException(HaltReason.SourceInconsistent,
-                $"The source drive is returning inconsistent data: {_sourceMismatches} files read differently the second time. Their originals were kept. "
-                + "Check the drive, cable, port or card reader before continuing.");
+                $"The source drive gives inconsistent data: {_sourceMismatches} files were different on the second read. The job kept their originals. "
+                + "Before you continue, check the drive, cable, port or card reader.");
         return SecondRead.Handled;
     }
 
     private void TargetDamagingFiles(JobItem item)
     {
-        Fail(item, "The copy did not match the original twice (checksum mismatch). The original was kept - check the target drive.");
+        Fail(item, "The copy did not match the original two times (checksum mismatch). The job kept the original. Check the target drive.");
         throw new JobHaltException(HaltReason.TargetDamagingFiles,
-            $"The target drive is damaging files: a fresh copy of {Path.GetFileName(item.Rel)} did not match the original. "
-            + "The original was kept. Check the target drive, cable or port before continuing.");
+            $"The target drive damages files: a new copy of {Path.GetFileName(item.Rel)} did not match the original. "
+            + "The job kept the original. Before you continue, check the target drive, cable or port.");
     }
 
     private void PlaceAndDeleteSource(JobItem item, string src, string dst, string temp, FileSnapshot? source)
     {
         CheckRootsIfPaused();
-        SetPhase("Moving into place");
+        SetPhase("Final rename in progress");
         int error = RetryRename(temp, dst);
         if (error is ERROR_ALREADY_EXISTS or ERROR_FILE_EXISTS)
         {
@@ -980,7 +987,7 @@ public sealed class JobRunner : IDisposable
             return;
         }
         if (error is ERROR_FILE_NOT_FOUND or ERROR_PATH_NOT_FOUND) CheckRoots();
-        if (error != 0) throw new Win32IOException(error, "Placing the verified copy", dst);
+        if (error != 0) throw new Win32IOException(error, "The final rename of the checked copy", dst);
         Fault("after-place-rename", item);
         if (source is not null) SafeFile.ApplyTimesAndAttributes(dst, Stamp(item, source)); // guard against NTFS name tunnelling
 
@@ -995,7 +1002,7 @@ public sealed class JobRunner : IDisposable
     private void DeleteSource(JobItem item, string src, FileSnapshot expected)
     {
         CheckRootsIfPaused();
-        SetPhase("Removing the original");
+        SetPhase("Removal of the original");
         DeleteOutcome outcome;
         try
         {
@@ -1032,9 +1039,10 @@ public sealed class JobRunner : IDisposable
         if (_closing || ++_notRemovableInARow < 2) return;
         int copies = _state.Items.Count(i => i.Failed && i.Stage == ItemStage.Placed);
         throw new JobHaltException(HaltReason.OriginalsNotRemovable, _copy
-            ? $"Originals can't be removed from the source (read-only or no permission). {copies:N0} verified copies are in the target; nothing was lost. "
-              + "Fix the permission or the write protection, then press Resume."
-            : "Files can't be moved out of the source (read-only or no permission). Nothing was lost. Fix the permission or the write protection, then press Resume.");
+            ? $"The job cannot remove the originals from the source folder (read-only or no permission). {copies:N0} checked copies are in the target folder. "
+              + "Nothing was lost. Fix the permission or the write protection. Then click Resume."
+            : "The job cannot move files out of the source folder (read-only or no permission). Nothing was lost. "
+              + "Fix the permission or the write protection. Then click Resume.");
     }
 
     /// <summary>
@@ -1068,7 +1076,7 @@ public sealed class JobRunner : IDisposable
     {
         if (item.ExpectedSha256 is { } expected && t.Size == item.Size && SafeFile.TrySnapshot(dst) is null)
         {
-            SetPhase("Verifying");
+            SetPhase("Copy check in progress");
             if (Hash(temp, t.Size, countWork: false) == expected)
             {
                 Record(new JournalRecord { Type = "copied", Index = item.Index, Sha256 = expected });
@@ -1097,7 +1105,7 @@ public sealed class JobRunner : IDisposable
             {
                 // The original is gone (its folder is still there): the verified copy is all that is left, so it is
                 // kept - also when the job is being ended.
-                SetPhase("Verifying");
+                SetPhase("Copy check in progress");
                 if (item.Sha256 is null) KeepCopy(item, temp, dst, JobPaths.UnverifiedCopySuffix, FailReasons.OriginalGoneDuringCopy);
                 else if (Hash(temp, item.Size) != item.Sha256) KeepDamagedCopy(item, temp, dst);
                 else PlaceAndDeleteSource(item, src, dst, temp, null); // under another name if its place is taken
@@ -1116,7 +1124,7 @@ public sealed class JobRunner : IDisposable
                 Skip(item, SkipReasons.ChangedDuringMove);
                 return;
             }
-            SetPhase("Verifying");
+            SetPhase("Copy check in progress");
             if (item.Sha256 is null)
             {
                 TryDeleteTemp(temp);
@@ -1177,10 +1185,10 @@ public sealed class JobRunner : IDisposable
         }
         if (item.Sha256 is null)
         {
-            Fail(item, "No checksum was recorded for this copy, so the original was kept - please check it.");
+            Fail(item, "The job log has no checksum for this copy, so the job kept the original. Check the copy.");
             return;
         }
-        SetPhase("Verifying");
+        SetPhase("Copy check in progress");
         if (s is null)
         {
             if (SourceFolderMissing(item, src)) return;
@@ -1236,7 +1244,7 @@ public sealed class JobRunner : IDisposable
     /// <summary>Renames a damaged copy out of the way ("name.damaged-copy") and copies the original again.</summary>
     private void SetAsideAndCopyAgain(JobItem item, string src, string dst)
     {
-        SetPhase("Setting a damaged copy aside");
+        SetPhase("Rename of a damaged copy");
         string aside = RenameAside(dst, dst, JobPaths.DamagedCopySuffix);
         // Recorded after the rename: if the job stops in between, the copy is simply missing and is made again.
         string rel = Path.GetRelativePath(_job.Target, aside);
@@ -1276,7 +1284,7 @@ public sealed class JobRunner : IDisposable
         {
             int error = SafeFile.TryRename(file, aside);
             if (error == 0) return aside;
-            if (error is not (ERROR_ALREADY_EXISTS or ERROR_FILE_EXISTS) || n > 99) throw new Win32IOException(error, "Keeping a copy under another name", file);
+            if (error is not (ERROR_ALREADY_EXISTS or ERROR_FILE_EXISTS) || n > 99) throw new Win32IOException(error, "The rename of the copy (to keep it)", file);
             aside = $"{dst}{suffix}-{n}";
         }
     }
@@ -1303,7 +1311,7 @@ public sealed class JobRunner : IDisposable
                 KeepCopy(item, temp!, dst, JobPaths.UnverifiedCopySuffix, FailReasons.UnfinishedCopyKept);
                 return;
             case ItemStage.Copied when t is not null:
-                SetPhase("Verifying");
+                SetPhase("Copy check in progress");
                 // The original could not be looked at, so it is never reported as gone: it is probably still in the source.
                 if (item.Sha256 is null) KeepCopy(item, temp!, dst, JobPaths.UnverifiedCopySuffix, FailReasons.UnfinishedCopyKept);
                 else if (Hash(temp!, t.Size) != item.Sha256) KeepCopy(item, temp!, dst, JobPaths.DamagedCopySuffix, FailReasons.DamagedCopyKeptNotChecked);
@@ -1333,7 +1341,7 @@ public sealed class JobRunner : IDisposable
 
     private void Finish(string how)
     {
-        SetPhase("Writing reports");
+        SetPhase("Report update in progress");
         // A close with nothing in flight works without checking the drives; never touch a folder that is not this job's.
         bool ownTarget = JobPaths.RootOfJournal(_state.JournalPath) is { } here && JobPaths.SamePath(here, _job.Target)
                          && Drives.IsOn(_job.Target, _job.TargetSerial) && Drives.LeadsTo(_job.Target, _job.TargetReal);
@@ -1455,8 +1463,8 @@ public sealed class JobRunner : IDisposable
         if (FreeBytes(_job.Target) is not long free || free >= bytes + RunSpaceMargin) return;
         string drive = TargetVolume?.DisplayNameWithLabel ?? (Path.GetPathRoot(_job.Target) ?? _job.Target).TrimEnd('\\');
         throw new JobHaltException(HaltReason.TargetFull,
-            $"The target drive {drive} is full: {Format.Bytes(bytes)} needed for the next file, {Format.Bytes(Math.Max(0, free - RunSpaceMargin))} free. "
-            + "Free up space, then resume the job. Nothing was lost.");
+            $"The target drive {drive} is full: the next file needs {Format.Bytes(bytes)}, and {Format.Bytes(Math.Max(0, free - RunSpaceMargin))} is free. "
+            + "Make more space available on it. Then resume the job. Nothing was lost.");
     }
 
     private (FileSnapshot Snapshot, string? Sha) SnapshotAndHash(JobItem item, string path, bool hash)
@@ -1495,7 +1503,7 @@ public sealed class JobRunner : IDisposable
             CheckRoots();
             throw new JobHaltException(HaltReason.TargetNotConnected, Drives.IsOn(_job.Target, _job.TargetSerial)
                 ? FolderGone("target", _job.Target, _job.TargetLabel)
-                : $"The target ({DriveWas(_job.Target, _job.TargetLabel)}) is not connected or was renamed: {_job.Target}. Reconnect it and press Resume. Nothing was lost.");
+                : NotConnected("target", _job.Target, _job.TargetLabel));
         }
         while (missing.TryPop(out string? f))
         {
@@ -1540,7 +1548,7 @@ public sealed class JobRunner : IDisposable
     {
         int error = SafeFile.TryRename(from, to);
         if (error is ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION or ERROR_ACCESS_DENIED or ERROR_WRITE_PROTECT)
-            throw new Win32IOException(error, "Moving", from);
+            throw new Win32IOException(error, "The move", from);
         return error;
     }, retryAccessDenied: true);
 
@@ -1557,7 +1565,7 @@ public sealed class JobRunner : IDisposable
                                              && attempt < _retryDelays.Length)
             {
                 string phase = _phase;
-                SetPhase(e.IsSharingViolation ? "Waiting - the file is in use by another program" : "Access denied - retrying");
+                SetPhase(e.IsSharingViolation ? "Short pause (another program uses the file)" : "Access denied (another attempt follows)");
                 if (_ct.WaitHandle.WaitOne(_retryDelays[attempt])) _ct.ThrowIfCancellationRequested();
                 SetPhase(phase);
             }
@@ -1646,7 +1654,7 @@ public static class JobFactory
 
     public static string CreateJournal(MovePlan plan)
     {
-        if (!plan.CanRun) throw new InvalidOperationException("This plan cannot be run: " + string.Join(" ", plan.Messages.Where(m => m.Level == MessageLevel.Error).Select(m => m.Text)));
+        if (!plan.CanRun) throw new InvalidOperationException("This plan cannot start: " + string.Join(" ", plan.Messages.Where(m => m.Level == MessageLevel.Error).Select(m => m.Text)));
 
         Directory.CreateDirectory(plan.TargetRoot);
         string logFolder = JobPaths.LogFolder(plan.TargetRoot);

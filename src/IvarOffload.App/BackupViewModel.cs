@@ -284,10 +284,10 @@ public sealed class BackupViewModel : ObservableObject
             string path = Full(Destinations[i].Path), root = Root(Destinations[i].Path);
             int twice = path.Length == 0 ? -1 : Destinations.Take(i).ToList().FindIndex(d => string.Equals(Full(d.Path), path, StringComparison.OrdinalIgnoreCase));
             int sameDrive = root.Length == 0 ? -1 : Destinations.Take(i).ToList().FindIndex(d => string.Equals(Root(d.Path), root, StringComparison.OrdinalIgnoreCase));
-            if (twice >= 0) Destinations[i].SetProblem($"The same folder as backup drive {twice + 1}. Choose another drive.", isError: true);
+            if (twice >= 0) Destinations[i].SetProblem($"This is the same folder as backup drive {twice + 1}. Choose another drive.", isError: true);
             else if (root.Length > 0 && string.Equals(root, sourceRoot, StringComparison.OrdinalIgnoreCase))
-                Destinations[i].SetProblem(sourceIsCard ? "This is on the card itself. Choose a folder on another drive." : "On the drive you are backing up: not a separate copy.", isError: sourceIsCard);
-            else if (sameDrive >= 0) Destinations[i].SetProblem($"On the same drive as backup drive {sameDrive + 1}: not a separate copy.", isError: false);
+                Destinations[i].SetProblem(sourceIsCard ? "This is on the card itself. Choose a folder on another drive." : "Not a separate copy: this drive also holds what you back up.", isError: sourceIsCard);
+            else if (sameDrive >= 0) Destinations[i].SetProblem($"Not a separate copy: this is the same drive as backup drive {sameDrive + 1}.", isError: false);
             else Destinations[i].SetProblem("", isError: false);
         }
 
@@ -427,7 +427,7 @@ public sealed class BackupViewModel : ObservableObject
         Raise(nameof(WhereLine));
         Raise(nameof(HasWhereLine));
         CheckDestinations();
-        if (State is BackupState.Previewed or BackupState.Finished && _plan is not null) ClearPlan("Something changed - check the card again.");
+        if (State is BackupState.Previewed or BackupState.Finished && _plan is not null) ClearPlan("Something changed. Check the card again.");
         else if (State == BackupState.Idle && !HasResult) Status = SetupStatus();
         CommandManager.InvalidateRequerySuggested();
     }
@@ -436,7 +436,7 @@ public sealed class BackupViewModel : ObservableObject
     private string SetupStatus() =>
         SourcePath.Trim().Length == 0 ? "Choose what to back up, and where to save the copies."
         : !Destinations.Any(d => d.Path.Trim().Length > 0) ? "Now choose where to save the copies."
-        : "Press “Check card” to see what will be copied. Nothing is copied until you start.";
+        : "Click “Check card” to see what the backup will copy. The app copies nothing until you start the backup.";
 
     private void BrowseSource()
     {
@@ -446,7 +446,7 @@ public sealed class BackupViewModel : ObservableObject
 
     internal void BrowseDestination(DestinationSlot slot)
     {
-        string? picked = _dialogs.PickFolder($"Choose where {slot.Label.ToLowerInvariant()} goes (a folder named after the card is made inside it)",
+        string? picked = _dialogs.PickFolder($"Choose the folder for {slot.Label.ToLowerInvariant()} (the app makes the backup folder in it)",
             slot.Path.Length > 0 ? slot.Path : null);
         if (picked is not null) slot.Path = picked;
     }
@@ -554,7 +554,7 @@ public sealed class BackupViewModel : ObservableObject
     /// <summary>The start of the one-line setup summary.</summary>
     public string SummaryVerb => State == BackupState.Previewed ? _plan?.IsTopUp == true ? "Add the new files of" : "Back up"
         : State == BackupState.Finished && _result?.Status is RunStatus.Completed ? "Backed up"
-        : "Backing up";
+        : "Backup of";
     /// <summary>The one-line summary: what the preview or the backup was made for (not what is typed in the boxes now).</summary>
     public string SummarySource { get; private set; } = "";
     public string SummaryWhere { get; private set; } = "";
@@ -610,8 +610,8 @@ public sealed class BackupViewModel : ObservableObject
         ClearPlan(null);
         _setupExpanded = false;
         State = BackupState.Scanning;
-        Status = "Checking the card...";
-        var progress = new Progress<ScanProgress>(p => Status = $"Checking the card... {p.Files:N0} files in {p.Folders:N0} folders");
+        Status = "Card check in progress...";
+        var progress = new Progress<ScanProgress>(p => Status = $"Card check in progress: {p.Files:N0} files in {p.Folders:N0} folders");
         try
         {
             (BackupPlan plan, BackupPlan? topUp) = await Task.Run(() =>
@@ -626,7 +626,7 @@ public sealed class BackupViewModel : ObservableObject
                 || !parents.SequenceEqual(Destinations.Select(d => d.Path.Trim().Trim('"')).Where(p => p.Length > 0)))
             {
                 State = BackupState.Idle;
-                Status = "Something changed during the check - check the card again.";
+                Status = "Something changed during the check. Check the card again.";
                 return;
             }
             _fullPlan = plan;
@@ -647,7 +647,7 @@ public sealed class BackupViewModel : ObservableObject
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
             State = BackupState.Idle;
-            Status = "Could not scan: " + e.Message;
+            Status = "The app could not check the card: " + e.Message;
         }
     }
 
@@ -660,7 +660,7 @@ public sealed class BackupViewModel : ObservableObject
             var toCopy = plan.Targets.Select(t => t.Earlier!.ToCopy).MaxBy(l => l.Sum(f => f.Size)) ?? [];
             CopyTileTitle = "WILL ADD";
             FilesCount = RunOutcome.Count(toCopy.Count, "file");
-            FilesSize = $"{Format.Bytes(toCopy.Sum(f => f.Size))}, then all {RunOutcome.Count(plan.Files.Count, "file")} of the card are verified";
+            FilesSize = $"{Format.Bytes(toCopy.Sum(f => f.Size))}, then a check of all {RunOutcome.Count(plan.Files.Count, "file")} on the card";
         }
         else
         {
@@ -681,11 +681,12 @@ public sealed class BackupViewModel : ObservableObject
         Alerts = alerts;
         // How the copies are checked, then the planner's notes: behind "Details".
         Notes = plan.Messages.Where(m => m.Level == MessageLevel.Info).Select(ToRow)
-            .Prepend(ToRow(new PlanMessage(MessageLevel.Info, (plan.Reread ? "The card is read twice, and each" : "Each")
-                + " copy is read back from its own drive and compared with the card by SHA-256. ASC MHL checksum files are written next to it, for other tools.")))
+            .Prepend(ToRow(new PlanMessage(MessageLevel.Info, (plan.Reread ? "The app reads the card twice. " : "")
+                + "After the app writes each copy, it reads the copy from its own drive and compares it with the card by SHA-256. "
+                + "It also writes ASC MHL checksum files next to the copies, for other tools.")))
             .ToList();
         StartLine = plan.Targets.Count == 0 ? ""
-            : (plan.IsTopUp ? "Adding to: " : "Saved as: ") + string.Join("  ·  ", plan.Targets.Select(t => t.Folder));
+            : (plan.IsTopUp ? "Will add to: " : "Saved as: ") + string.Join("  ·  ", plan.Targets.Select(t => t.Folder));
         StartWarn = plan.SameDriveNote ?? "";
         TopUpText = _fullPlan?.TopUp is { } offer ? offer.Describe(adding: plan.IsTopUp, plan.Files.Count) : "";
         SetSummary(plan.SourceName, plan.Targets.Select(t => t.Folder));
@@ -729,9 +730,9 @@ public sealed class BackupViewModel : ObservableObject
 
     /// <summary>The line at the bottom after a scan.</summary>
     private string PreviewStatus() =>
-        _plan is not { CanRun: true } ? "The backup can't start - see above."
-        : Alerts.Count == 0 ? "Ready. Nothing has been copied yet."
-        : $"Read the {(Alerts.Count == 1 ? "warning" : $"{Alerts.Count} warnings")} above first. Nothing has been copied yet.";
+        _plan is not { CanRun: true } ? "The backup cannot start. For the reason, see the messages above."
+        : Alerts.Count == 0 ? "Ready. The app did not copy any files yet."
+        : $"Read the {(Alerts.Count == 1 ? "warning" : $"{Alerts.Count} warnings")} above before you start. The app did not copy any files yet.";
 
     private static string DriveOf(BackupTarget t) => t.Volume is { } v ? BackupTexts.DriveText(v.Root, v.Label) : t.DriveName;
 
@@ -791,12 +792,12 @@ public sealed class BackupViewModel : ObservableObject
         if (_plan is not { CanRun: true } plan) return;
         if (_otherJobRunning())
         {
-            _dialogs.Inform(WpfDialogs.Caption, "A sort is running in this window. Let it finish (or stop it) before starting a backup.");
+            _dialogs.Inform(WpfDialogs.Caption, "A sort is in progress in this window. Wait until it finishes, or stop it. Then start the backup.");
             return;
         }
         ClearResult();
         SaveSettings(); // the destinations are remembered once a backup really goes to them
-        await RunAsync(options => BackupRunner.Start(plan, options), (runner, ct) => runner.Run(ct), "Backing up");
+        await RunAsync(options => BackupRunner.Start(plan, options), (runner, ct) => runner.Run(ct), "Backup in progress");
     }
 
     private async Task RunExistingAsync(bool close)
@@ -804,22 +805,22 @@ public sealed class BackupViewModel : ObservableObject
         if (ResumableJob is not { } job) return;
         if (_otherJobRunning())
         {
-            _dialogs.Inform(WpfDialogs.Caption, "A sort is running in this window. Let it finish (or stop it) first.");
+            _dialogs.Inform(WpfDialogs.Caption, "A sort is in progress in this window. Before you continue, wait until it finishes, or stop it.");
             return;
         }
         ClearPlan(null);
         ClearResult();
         SetSummary(job.Header.SourceLabel, job.Header.Targets);
         await RunAsync(options => BackupRunner.Open(job.JournalPath, options), (runner, ct) => close ? runner.Close(ct) : runner.Run(ct),
-            close ? "Ending the backup" : "Resuming the backup");
+            close ? "The app ends the backup" : "The backup continues");
     }
 
     private async Task CloseJobAsync()
     {
         if (!_dialogs.Confirm("Stop here",
-                "Stop this backup without copying the rest?\n\nThe files already copied and checked are kept, and nothing is deleted. "
-                + "The rest is not in the backup, so don't format the card. You can back it up again later into a new folder.\n\n"
-                + "The card does not need to be connected for this."))
+                "Stop this backup here? The app will not copy the rest of the files.\n\nThe app keeps the files that it copied and checked. It deletes nothing. "
+                + "The rest of the files are not in the backup, so do not format the card. Later, you can back up the card again into a new folder.\n\n"
+                + "You do not need to connect the card for this."))
             return;
         await RunExistingAsync(close: true);
     }
@@ -855,8 +856,8 @@ public sealed class BackupViewModel : ObservableObject
         {
             // Whatever went wrong, the result card says so (never a crash or a stuck window): the logs hold every finished copy.
             SetResult(new ResultView(ResultTone.Attention, "The backup could not continue", "", [],
-                e.Message + (journal is null ? "" : "\n\nNothing is lost: every finished copy is recorded, and the backup can be resumed."),
-                BackupTexts.KeepTheCard, "The backup could not continue - see the message above."));
+                e.Message + (journal is null ? "" : "\n\nThe job log records every finished copy, so you lose nothing. You can resume the backup."),
+                BackupTexts.KeepTheCard, "The backup could not continue. For the reason, see the message above."));
         }
         finally
         {
@@ -884,19 +885,12 @@ public sealed class BackupViewModel : ObservableObject
         Progress = p.Fraction;
         ProgressLeft = $"{p.ItemsFinished:N0} of {p.ItemsTotal:N0} files";
         ProgressRight = p.BytesPerSecond > 0 ? $"{Format.Rate(p.BytesPerSecond)}{(p.Remaining is { } r ? $"  ·  {Format.Duration(r)} left" : "")}" : "";
-        ProgressFile = p.CurrentFile is null ? PhaseText(p.Phase) : $"{PhaseText(p.Phase)}: {p.CurrentFile}";
+        ProgressFile = p.CurrentFile is null ? p.Phase : $"{p.Phase}: {p.CurrentFile}";
         DestinationProgress = p.Destinations.Select(d => new DestinationProgressRow(d.DriveName, d.Folder,
             p.ItemsTotal == 0 ? 0 : (double)d.Verified / p.ItemsTotal,
             d.Offline ?? $"{d.Verified:N0} of {p.ItemsTotal:N0} checked{(d.Failed > 0 ? $", {d.Failed:N0} failed" : "")}", d.Offline is not null)).ToList();
         Raise(nameof(DestinationProgress));
     }
-
-    /// <summary>The engine's step, in the app's words ("Verifying" is "Checking" here).</summary>
-    private static string PhaseText(string phase) => phase switch
-    {
-        "Verifying" => "Checking",
-        _ => phase,
-    };
 
     private void TogglePause()
     {
@@ -905,13 +899,13 @@ public sealed class BackupViewModel : ObservableObject
         {
             _pause.Resume();
             IsPaused = false;
-            Status = "Backing up...";
+            Status = "Backup in progress...";
         }
         else
         {
             _pause.Pause();
             IsPaused = true;
-            Status = "Paused. Do not unplug the card or the drives while paused - press Stop first.";
+            Status = "Paused. Do not disconnect the card or the drives while the backup is paused. If you must disconnect them, click Stop first.";
         }
     }
 
@@ -920,7 +914,7 @@ public sealed class BackupViewModel : ObservableObject
         _pause?.Resume();
         IsPaused = false;
         _cts?.Cancel();
-        Status = "Stopping safely after the current step...";
+        Status = State == BackupState.Verifying ? "The check stops safely after this step..." : "The backup stops safely after this step...";
     }
 
     /// <summary>Called by the window when it is closed during a backup.</summary>
@@ -1004,8 +998,8 @@ public sealed class BackupViewModel : ObservableObject
         _cts = new CancellationTokenSource();
         CancellationToken ct = _cts.Token;
         State = BackupState.Verifying;
-        Status = "Checking every copy again...";
-        var progress = new Progress<(int Done, int Total, string File)>(p => Status = $"Checking every copy again... {p.Done:N0} of {p.Total:N0}");
+        Status = "Check of the copies in progress...";
+        var progress = new Progress<(int Done, int Total, string File)>(p => Status = $"Check of the copies in progress: {p.Done:N0} of {p.Total:N0}");
         try
         {
             BackupVerifyResult v = await Task.Run(() => BackupVerifier.Verify(journal, progress, ct));
@@ -1013,11 +1007,12 @@ public sealed class BackupViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            Status = "Checking again was stopped.";
+            Status = "The check of the copies stopped.";
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JournalException)
         {
-            SetResult(new ResultView(ResultTone.Attention, "Could not check again", "", [], e.Message, BackupTexts.KeepTheCard, "Could not check again - see above."));
+            SetResult(new ResultView(ResultTone.Attention, "The app could not check the copies again", "", [], e.Message, BackupTexts.KeepTheCard,
+                "The app could not check the copies again. For the reason, see above."));
         }
         State = BackupState.Finished;
     }
@@ -1070,7 +1065,7 @@ public sealed class BackupViewModel : ObservableObject
         else if (offline is not null)
         {
             BannerTitle = BackupTexts.OfflineBanner(offline);
-            BannerText = "“Forget this backup” only removes it from this list; its logs stay on the destinations.";
+            BannerText = "“Forget this backup” only removes it from this list. Its job logs stay on the backup drives.";
         }
         else BannerTitle = BannerText = "";
         foreach (string p in new[] { nameof(ResumableJob), nameof(OfflineJob), nameof(HasBanner), nameof(BannerOffline), nameof(BannerTitle), nameof(BannerText), nameof(ShowStart) })

@@ -172,7 +172,7 @@ public class LegacyTests
         Directory.CreateDirectory(Path.Join(other, "Card3"));
         File.WriteAllBytes(Path.Join(other, @"Card3\C0003.MP4"), new byte[5000]);
         MovePlan plan = Planner.Build(Scanner.Scan(other), t.Target, MoveMode.Videos, verifyChecksums: true);
-        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith($"This target already holds files sorted from {t.Source}", StringComparison.Ordinal));
+        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith($"This target folder already holds files that an earlier sort moved from {t.Source}", StringComparison.Ordinal));
     }
 
     [Fact]

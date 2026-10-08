@@ -78,10 +78,10 @@ public sealed record ConnectedCard(string Root, string Name, string FileSystem, 
 public static partial class BackupPlanner
 {
     /// <summary>In the warning for a destination on the drive being backed up (the app shows these as one line of its own).</summary>
-    public const string SameDriveAsSourceMarker = "is on the same drive as the folder being backed up";
+    public const string SameDriveAsSourceMarker = "is on the same drive as the folder that you back up";
 
     /// <summary>In the warning for destinations that share a drive (the app shows these as one line of its own).</summary>
-    public const string SharedDriveMarker = "destinations are on the same drive";
+    public const string SharedDriveMarker = "backup folders are on the same drive";
 
     /// <summary>
     /// Connected drives that look like memory cards or camera drives (a camera folder structure at the root on a FAT,
@@ -143,7 +143,7 @@ public static partial class BackupPlanner
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            messages.Add(new PlanMessage(MessageLevel.Error, $"Cannot read the card or drive: {e.Message}"));
+            messages.Add(new PlanMessage(MessageLevel.Error, $"It is not possible to read the card or drive: {e.Message}"));
         }
 
         bool isCard = false;
@@ -160,7 +160,7 @@ public static partial class BackupPlanner
         }
 
         if (scan.Files.Count == 0)
-            messages.Add(new PlanMessage(MessageLevel.Error, "Nothing to back up: there are no files in this folder."));
+            messages.Add(new PlanMessage(MessageLevel.Error, "There is nothing to back up: this folder has no files."));
         AddScanFindings(scan, messages);
 
         // An earlier backup of this card on every destination, that the card's new files can be added to.
@@ -171,7 +171,7 @@ public static partial class BackupPlanner
             offer = EarlierBackups.FindTopUp(scan, sourceVolume?.SerialNumber ?? 0, parents, out refusal);
         if (topUp && offer is null)
             messages.Add(new PlanMessage(MessageLevel.Error, refusal
-                ?? "There is no earlier backup of this card in the chosen destination folders to add new files to. Make a new backup instead."));
+                ?? "The folders that you selected for the backup drives have no earlier backup of this card to add new files to. Make a new backup instead."));
         bool adding = topUp && offer is not null;
 
         string? nameError = adding ? null : ValidateName(name);
@@ -180,9 +180,9 @@ public static partial class BackupPlanner
         var targets = new List<BackupTarget>();
         var unfinished = new List<string>();
         var looked = new List<string>(); // every backup folder of a destination that could be looked at, for earlier backups next to it
-        if (destinations.Count == 0) messages.Add(new PlanMessage(MessageLevel.Error, "Choose a destination for the backup."));
+        if (destinations.Count == 0) messages.Add(new PlanMessage(MessageLevel.Error, "Select a backup drive for the backup."));
         if (destinations.Count > MaxTargets)
-            messages.Add(new PlanMessage(MessageLevel.Error, $"A backup can go to at most {MaxTargets} destinations."));
+            messages.Add(new PlanMessage(MessageLevel.Error, $"You can select a maximum of {MaxTargets} backup drives for a backup."));
         int k = -1;
         foreach (string parent in destinations.Take(MaxTargets))
         {
@@ -208,11 +208,11 @@ public static partial class BackupPlanner
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                messages.Add(new PlanMessage(MessageLevel.Error, $"Cannot read the destination drive of {folder}: {e.Message}"));
+                messages.Add(new PlanMessage(MessageLevel.Error, $"It is not possible to read the drive of {folder}: {e.Message}"));
             }
             if (targets.FirstOrDefault(t => SameFolder(t.Folder, folder, env.RealPathOf)) is { } twice)
             {
-                messages.Add(new PlanMessage(MessageLevel.Error, $"The same destination is chosen twice: {twice.Folder}."));
+                messages.Add(new PlanMessage(MessageLevel.Error, $"You selected the same backup folder two times: {twice.Folder}."));
                 continue;
             }
             targets.Add(new BackupTarget
@@ -229,15 +229,15 @@ public static partial class BackupPlanner
         {
             if (t.Volume is null) continue;
             if (sourceVolume is not null && t.Volume.IsSameVolume(sourceVolume) && !isCard)
-                sameDrive ??= $"Not a separate copy: {t.DriveName} is the drive being backed up.";
+                sameDrive ??= $"Not a separate copy: {t.DriveName} is the drive that you back up.";
             if (sourceVolume is not null && t.Volume.IsSameVolume(sourceVolume))
                 messages.Add(isCard
-                    ? new PlanMessage(MessageLevel.Error, $"{t.Folder} is on the card itself. A backup never writes to the card: choose a folder on another drive.")
+                    ? new PlanMessage(MessageLevel.Error, $"{t.Folder} is on the card that you back up. A backup never writes to the card. Select a folder on a different drive.")
                     : new PlanMessage(MessageLevel.Warning, $"{t.Folder} {SameDriveAsSourceMarker} ({t.DriveName}). "
-                        + "It is not a separate copy: if that drive fails, both are lost."));
+                        + "It is not a separate copy. If that drive fails, you lose both."));
             string? sync = env.SyncOf(t.Folder);
             if (sync is not null)
-                messages.Add(new PlanMessage(MessageLevel.Info, $"{t.Folder} is synchronized by {sync}: the backup will be uploaded from there too."));
+                messages.Add(new PlanMessage(MessageLevel.Info, $"{sync} synchronizes {t.Folder}, so {sync} will also upload the backup from there."));
         }
         CheckSpace(targets, t => t.Earlier?.ToCopy ?? scan.Files, env, messages);
         messages.AddRange(EarlierBackups.Check(scan, sourceVolume?.SerialNumber ?? 0, looked.Select(f => Path.GetDirectoryName(f)!),
@@ -247,17 +247,18 @@ public static partial class BackupPlanner
         foreach (var shared in targets.Where(t => t.Volume is not null).GroupBy(t => (t.Volume!.SerialNumber, t.Volume.Root.ToUpperInvariant())).Where(g => g.Count() > 1))
         {
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{shared.Count()} {SharedDriveMarker} ({shared.First().DriveName}). They are not separate copies: if that drive fails, all of them are lost."));
-            sameDrive ??= $"Not separate copies: {shared.Count()} destinations are on the same drive ({shared.First().DriveName}).";
+                $"{shared.Count()} {SharedDriveMarker} ({shared.First().DriveName}). They are not separate copies. If that drive fails, you lose all of them."));
+            sameDrive ??= $"Not separate copies: {shared.Count()} {SharedDriveMarker} ({shared.First().DriveName}).";
         }
 
         int generations = AscMhl.GenerationsIn(source);
         if (generations > 0)
             messages.Add(new PlanMessage(MessageLevel.Info,
-                $"The card has an ASC MHL checksum history ({generations} generation{(generations == 1 ? "" : "s")}). It is copied, and the backup adds its own generation to it on every destination."));
+                $"The card has an ASC MHL checksum history ({generations} generation{(generations == 1 ? "" : "s")}). The backup copies it and adds its own generation to it on each backup drive."));
         if (!reread)
             messages.Add(new PlanMessage(MessageLevel.Info,
-                "The second read of the card is off: every copy is still read back from its destination and compared, but a card or reader that returns wrong data once may go unnoticed."));
+                "The second read of the card is off. The backup still reads each copy back from its backup drive and compares it. "
+                + "But if a card or reader returns incorrect data one time, it is possible that the backup does not find the error."));
 
         return new BackupPlan
         {
@@ -287,23 +288,23 @@ public static partial class BackupPlanner
         {
             int n = offer.ChangedFiles.Count;
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{(n == 1 ? "1 file" : $"{n:N0} files")} on the card {(n == 1 ? "has" : "have")} the name of a file in the backup but another size or date "
-                + $"(e.g. {offer.ChangedFiles[0]}): a different shot whose number the camera used again after a deletion, or a file edited in the camera. "
-                + $"The backup's version stays next to the card's, renamed \"{Path.GetFileNameWithoutExtension(offer.ChangedFiles[0])} (earlier){Path.GetExtension(offer.ChangedFiles[0])}\"."));
+                $"{(n == 1 ? "1 file" : $"{n:N0} files")} on the card {(n == 1 ? "has" : "have")} the name of a file in the backup, but a different size or date "
+                + $"(for example {offer.ChangedFiles[0]}). It can be a different shot with a number that the camera used again after a deletion, or a file that you edited in the camera. "
+                + $"The version in the backup stays next to the card's version, with the name \"{Path.GetFileNameWithoutExtension(offer.ChangedFiles[0])} (earlier){Path.GetExtension(offer.ChangedFiles[0])}\"."));
         }
         if (offer.Missing > 0)
         {
             TopUpFolder most = offer.Folders.MaxBy(f => f.Missing)!;
             messages.Add(new PlanMessage(MessageLevel.Warning,
                 $"{(offer.Missing == 1 ? "1 file" : $"{offer.Missing:N0} files")} ({Format.Bytes(most.MissingBytes)}) of the backup {(offer.Missing == 1 ? "is" : "are")} no longer in "
-                + $"{most.Folder} (moved out by a sort, or deleted): {(offer.Missing == 1 ? "it is" : "they are")} copied into it again from the card, so the folder "
-                + "holds the whole card again. Files a sort moved out are then in both places."));
+                + $"{most.Folder} (because of a sort or a deletion). The backup copies {(offer.Missing == 1 ? "it" : "them")} into the folder again from the card, so that the folder "
+                + "contains the whole card again. Then the files that a sort moved out are in both places."));
         }
         if (offer.EditedInFolder > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{(offer.EditedInFolder == 1 ? "1 file" : $"{offer.EditedInFolder:N0} files")} in the backup folder changed there since the earlier backup "
-                + $"(edited by another program?): the card's version is copied in {(offer.EditedInFolder == 1 ? "its" : "their")} place, and the edited "
-                + $"{(offer.EditedInFolder == 1 ? "one is" : "ones are")} kept in {replaced}."));
+                $"{(offer.EditedInFolder == 1 ? "1 file" : $"{offer.EditedInFolder:N0} files")} in the backup folder changed there after the earlier backup. "
+                + $"It is possible that a different program edited {(offer.EditedInFolder == 1 ? "it" : "them")}. The backup copies the card's version in {(offer.EditedInFolder == 1 ? "its" : "their")} place "
+                + $"and keeps the edited {(offer.EditedInFolder == 1 ? "file" : "files")} in {replaced}."));
     }
 
     private static string? FullPathOrNull(string path)
@@ -324,10 +325,10 @@ public static partial class BackupPlanner
         folder = earlier;
         string realSource = realPath(source), realFolder = realPath(folder);
         if (Planner.IsInside(folder, source) || Planner.IsInside(realFolder, realSource))
-            return $"The earlier backup {folder} is inside the folder being backed up. Choose a folder on another drive.";
+            return $"The earlier backup {folder} is in the folder that you back up. Select a folder on a different drive.";
         if (Planner.IsInside(source, folder) || Planner.IsInside(realSource, realFolder))
-            return $"The folder being backed up is inside the earlier backup {folder}. Choose another destination.";
-        return Directory.Exists(folder) ? null : $"The earlier backup {folder} is not there any more. Scan again.";
+            return $"The folder that you back up is in the earlier backup {folder}. Select a different folder for the backup.";
+        return Directory.Exists(folder) ? null : $"The earlier backup {folder} is no longer there. Check the card again.";
     }
 
     /// <summary>
@@ -364,11 +365,11 @@ public static partial class BackupPlanner
     public static readonly IReadOnlyList<(string Token, string Meaning)> TemplateTokens =
     [
         ("{card}", "the card's label (its name in Windows), or the folder's name"),
-        ("{camera}", "the camera make, e.g. Sony (left out when the card doesn't show it)"),
+        ("{camera}", "the camera make, for example Sony (not used when the card does not show it)"),
         ("{YYMMDD}", "the date, as 260928"),
         ("{HHMMSS}", "the time, as 143015"),
         ("{...}", "any mix of YYYY or YY (year), MM (month), DD (day), HH (hour), MM (minutes, after HH or before SS) and SS "
-            + "(seconds), with - _ . or a space between them, e.g. {YYYY-MM-DD} or {YYMMDD_HHMMSS}"),
+            + "(seconds), with - _ . or a space between them, for example {YYYY-MM-DD} or {YYMMDD_HHMMSS}"),
     ];
 
     /// <summary>
@@ -393,18 +394,18 @@ public static partial class BackupPlanner
     /// <summary>An error for a folder name pattern that cannot be used, or null.</summary>
     public static string? ValidateTemplate(string template)
     {
-        if (string.IsNullOrWhiteSpace(template)) return "Enter a pattern for the folder name, e.g. " + DefaultTemplate + ".";
+        if (string.IsNullOrWhiteSpace(template)) return "Enter a pattern for the folder name, for example " + DefaultTemplate + ".";
         foreach (Match m in TemplateToken().Matches(template))
             if (!IsNameToken(m.Value) && DateTimeCodes(m.Value) is null)
-                return $"{m.Value} is not known. Use {{card}}, {{camera}}, or date and time codes such as {{YYMMDD}} or {{HHMMSS}} "
+                return $"{m.Value} is not a known part of a pattern. Use {{card}}, {{camera}}, or date and time codes, for example {{YYMMDD}} or {{HHMMSS}} "
                     + "(YYYY, YY, MM, DD, HH, SS).";
         string rest = TemplateToken().Replace(template, "");
-        if (rest.IndexOfAny(['{', '}']) >= 0) return "A { or } in the pattern is not part of a known name such as {card}.";
+        if (rest.IndexOfAny(['{', '}']) >= 0) return "A { or } in the pattern is not part of a known name, for example {card}.";
         // Checked with and without a camera make: most cards don't show one.
         foreach (string? camera in new[] { "Sony", null })
         {
             string name = ExpandTemplate(template, new DateTime(2026, 9, 28, 14, 30, 15), "SONY_A", camera);
-            if (name.Length == 0) return "Add a date such as {YYMMDD}, or {card}, to the pattern: a card that doesn't show its camera make would get no name.";
+            if (name.Length == 0) return "Add a date (for example {YYMMDD}) or {card} to the pattern. If a card does not show its camera make, this pattern gives no name.";
             if (ValidateName(name) is { } error) return error.Replace("The backup folder name", "The pattern", StringComparison.Ordinal);
         }
         return null;
@@ -540,7 +541,7 @@ public static partial class BackupPlanner
         if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.Contains('/') || name.Contains('\\'))
             return "The backup folder name cannot contain any of these characters: \\ / : * ? \" < > |";
         if (name is "." or ".." || ReservedNames.Contains(Path.GetFileNameWithoutExtension(name)))
-            return $"\"{name}\" cannot be used as a folder name in Windows.";
+            return $"You cannot use \"{name}\" as a folder name in Windows.";
         return null;
     }
 
@@ -571,7 +572,7 @@ public static partial class BackupPlanner
     {
         folder = "";
         unfinishedJournal = null;
-        if (string.IsNullOrWhiteSpace(parent)) return "Choose a destination folder.";
+        if (string.IsNullOrWhiteSpace(parent)) return "Select a folder on the backup drive.";
         string full;
         try
         {
@@ -579,25 +580,25 @@ public static partial class BackupPlanner
         }
         catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            return $"The destination path is not valid: {e.Message}";
+            return $"The path for the backup drive is not valid: {e.Message}";
         }
         if (Path.GetPathRoot(full) is not { Length: > 0 } root || !Directory.Exists(root))
-            return $"The drive for the destination {full} ({Path.GetPathRoot(full)}) is not connected.";
+            return $"The drive for {full} ({Path.GetPathRoot(full)}) is not connected.";
         if (full[root.Length..].IndexOfAny([':', '*', '?', '"', '<', '>', '|']) >= 0)
-            return $"The destination path is not valid (a folder name contains one of : * ? \" < > |): {full}";
-        if (File.Exists(full)) return $"The destination {full} is a file, not a folder.";
+            return $"The path for the backup drive is not valid (a folder name contains one of : * ? \" < > |): {full}";
+        if (File.Exists(full)) return $"The path for the backup drive, {full}, is a file, not a folder.";
         if (name.Length == 0) return null; // the name error is reported once
         folder = Path.Join(full, name);
         string realSource = realPath(source), realFolder = realPath(folder);
         if (Planner.IsInside(folder, source) || Planner.IsInside(realFolder, realSource))
-            return $"The destination {folder} is inside the folder being backed up. Choose a folder on another drive.";
+            return $"The backup folder {folder} is in the folder that you back up. Select a folder on a different drive.";
         if (Planner.IsInside(source, folder) || Planner.IsInside(realSource, realFolder))
-            return $"The folder being backed up is inside the destination {folder}. Choose another destination.";
-        if (File.Exists(folder)) return $"{folder} is a file. Choose another name for the backup folder.";
+            return $"The folder that you back up is in the backup folder {folder}. Select a different folder for the backup.";
+        if (File.Exists(folder)) return $"{folder} is a file. Enter a different name for the backup folder.";
         if (Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any())
         {
             if (UnfinishedBackupIn(folder) is not { } other)
-                return $"{folder} already exists and is not empty. A backup never mixes two cards: choose another name or another destination folder.";
+                return $"{folder} already exists and is not empty. A backup never mixes two cards in one folder. Enter a different name, or select a different folder for the backup drive.";
             unfinishedJournal = other.JournalPath;
             string started = other.Header.Created is { Length: >= 16 } at ? at[..16].Replace('T', ' ') : "earlier";
             // The same card is recognized by its drive's serial number (its letter may differ), or else by its path.
@@ -606,8 +607,8 @@ public static partial class BackupPlanner
                 ? other.Header.SourceSerial == sourceSerial && string.Equals(BelowRoot(other.Header.Source), BelowRoot(source), StringComparison.OrdinalIgnoreCase)
                 : SameFolder(other.Header.Source, source, p => p);
             return sameCard
-                ? $"{folder} holds an unfinished backup of this card (started {started}). Resume it (above) instead of starting a new one."
-                : $"{folder} holds an unfinished backup of another card ({other.Header.SourceLabel}, started {started}). Resume that one (above), or choose another name.";
+                ? $"{folder} contains an unfinished backup of this card (started {started}). Resume it (above) instead of a new backup."
+                : $"{folder} contains an unfinished backup of a different card ({other.Header.SourceLabel}, started {started}). Resume that backup (above), or enter a different name.";
         }
         return null;
     }
@@ -655,7 +656,7 @@ public static partial class BackupPlanner
                 messages.Add(copies == 1 || !m.Text.StartsWith("Not enough free space", StringComparison.Ordinal)
                     ? m
                     : new PlanMessage(MessageLevel.Error, $"Not enough free space on {volume.DisplayName} for {copies} copies of the card: "
-                        + $"{Format.Bytes(all)} needed, {Format.Bytes(volume.FreeBytes)} available."));
+                        + $"they need {Format.Bytes(all)}, and {Format.Bytes(volume.FreeBytes)} is available."));
         }
     }
 
@@ -663,19 +664,19 @@ public static partial class BackupPlanner
     {
         if (scan.Problems.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{scan.Problems.Count:N0} folder{(scan.Problems.Count == 1 ? "" : "s")} could not be read, so {(scan.Problems.Count == 1 ? "its" : "their")} files are not in the backup: "
-                + string.Join("; ", scan.Problems.Take(3)) + (scan.Problems.Count > 3 ? "; ..." : "")));
+                $"The scan could not read {scan.Problems.Count:N0} folder{(scan.Problems.Count == 1 ? "" : "s")}, so {(scan.Problems.Count == 1 ? "its" : "their")} files are not in the backup: "
+                + string.Join(" | ", scan.Problems.Take(3)) + (scan.Problems.Count > 3 ? " | ..." : "")));
         if (scan.LeftOut.Count > 0)
             foreach (var group in scan.LeftOut.GroupBy(f => f.Why))
                 messages.Add(new PlanMessage(MessageLevel.Warning,
-                    $"{group.Count():N0} file{(group.Count() == 1 ? "" : "s")} not copied: {group.Key} (e.g. {group.First().RelativePath})."));
+                    $"{group.Count():N0} file{(group.Count() == 1 ? "" : "s")} (for example {group.First().RelativePath}): {group.Key}{(group.Key.EndsWith('.') ? "" : ".")}"));
         var links = scan.SkippedFolders.Where(f => !BackupScanner.OsClutter.ContainsKey(Path.GetFileName(f.RelativePath))).ToList();
         if (links.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Warning,
-                $"{links.Count:N0} linked folder{(links.Count == 1 ? " is" : "s are")} not copied (links are never followed): {string.Join(", ", links.Take(3).Select(f => f.RelativePath))}."));
+                $"{links.Count:N0} linked folder{(links.Count == 1 ? " is" : "s are")} not copied (the backup never follows links): {string.Join(", ", links.Take(3).Select(f => f.RelativePath))}."));
         var clutter = scan.SkippedFolders.Where(f => BackupScanner.OsClutter.ContainsKey(Path.GetFileName(f.RelativePath))).ToList();
         if (clutter.Count > 0)
             messages.Add(new PlanMessage(MessageLevel.Info,
-                $"Left out: {string.Join(", ", clutter.Select(f => f.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Take(5))} (kept by Windows or macOS, not by the camera)."));
+                $"Not copied: {string.Join(", ", clutter.Select(f => f.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Take(5))} (system folders of Windows or macOS, not from the camera)."));
     }
 }

@@ -26,8 +26,8 @@ public class BackupCardTests
         string text = offer.Describe(adding: false, again.Files.Count);
         Assert.Contains(t.Dest(0), text);
         Assert.Contains(t.Dest(1), text); // one offer for the earlier backup, naming both of its copies
-        Assert.Contains("It holds every file of the card as the card is now", text);
-        Assert.DoesNotContain(again.Messages, m => m.Text.Contains("backed up on") || m.Text.Contains("already backed up"));
+        Assert.Contains("It contains all files of the card as they are now", text);
+        Assert.DoesNotContain(again.Messages, m => m.Text.Contains("backup of this card from") || m.Text.Contains("already a backup") || m.Text.Contains("already in a backup"));
         Assert.True(again.CanRun); // a second copy is the user's decision
     }
 
@@ -41,7 +41,7 @@ public class BackupCardTests
 
         TopUpOffer offer = Assert.IsType<TopUpOffer>(PlanAs(t, "second").TopUp);
         Assert.Equal((1, 7, 0), (offer.New, offer.Unchanged, offer.Changed));
-        Assert.Contains("the card has 1 new file since then", offer.Describe(adding: false, 8), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("the card now has 1 new file", offer.Describe(adding: false, 8), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -57,12 +57,12 @@ public class BackupCardTests
         foreach (string f in Directory.EnumerateFiles(other.Card, "*", SearchOption.AllDirectories))
             File.SetLastWriteTimeUtc(f, File.GetLastWriteTimeUtc(f).AddDays(3));
         BackupPlan wrong = BackupPlanner.Build(BackupScanner.Scan(other.Card), [t.Parents[0]], "other");
-        Assert.DoesNotContain(wrong.Messages, m => m.Text.Contains("already backed up") || m.Text.Contains("backed up on"));
+        Assert.DoesNotContain(wrong.Messages, m => m.Text.Contains("already a backup") || m.Text.Contains("already in a backup") || m.Text.Contains("backup of this card from"));
 
         // The same card with one file edited since: not the same card any more.
         string clip = Path.Join(t.Card, @"PRIVATE\M4ROOT\CLIP\C0001M01.XML");
         File.SetLastWriteTimeUtc(clip, File.GetLastWriteTimeUtc(clip).AddMinutes(1));
-        Assert.DoesNotContain(PlanAs(t, "second").Messages, m => m.Text.Contains("already backed up"));
+        Assert.DoesNotContain(PlanAs(t, "second").Messages, m => m.Text.Contains("already a backup") || m.Text.Contains("already in a backup"));
     }
 
     [Fact]
@@ -77,8 +77,8 @@ public class BackupCardTests
         TopUpOffer offer = Assert.IsType<TopUpOffer>(PlanAs(t, "second").TopUp);
         Assert.Equal(2, offer.Missing);
         string text = offer.Describe(adding: false, 7);
-        Assert.Contains("2 files of that backup are no longer in its folder (moved out by a sort, or deleted)", text);
-        Assert.DoesNotContain("It holds every file", text);
+        Assert.Contains("2 files of that backup are no longer in its folder (because of a sort or a deletion)", text);
+        Assert.DoesNotContain("It contains all files", text);
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class BackupCardTests
         TopUpOffer offer = Assert.IsType<TopUpOffer>(plan.TopUp);
         Assert.Equal(Path.Join(t.Parents[0], "day3"), Assert.Single(offer.Folders).Folder); // the newest
         Assert.Equal((1, 10), (offer.New, offer.Unchanged));
-        Assert.DoesNotContain(plan.Messages, m => m.Text.Contains("backed up on") || m.Text.Contains("already backed up")); // nor the older ones
+        Assert.DoesNotContain(plan.Messages, m => m.Text.Contains("backup of this card from") || m.Text.Contains("already a backup") || m.Text.Contains("already in a backup")); // nor the older ones
     }
 
     [Fact]
@@ -136,9 +136,10 @@ public class BackupCardTests
         TopUpOffer offer = Assert.IsType<TopUpOffer>(PlanAs(t, "second").TopUp);
         Assert.True(offer.EndedEarly);
         string text = offer.Describe(adding: false, 7);
-        Assert.Contains("ended before every file was copied", text);
+        Assert.Contains("that backup ended before it copied all files", text);
         Assert.Contains("of the card are not in that backup", text);
         Assert.DoesNotContain("verified", text);
+        Assert.DoesNotContain("checked", text);
         Assert.DoesNotContain("new file", text);
     }
 
@@ -233,8 +234,8 @@ public class BackupCardTests
         Assert.Null(BackupPlanner.ValidateTemplate(BackupPlanner.DefaultTemplate));
         Assert.Null(BackupPlanner.ValidateTemplate("Job 42 {YYYY-MM-DD}"));
         Assert.Null(BackupPlanner.ValidateTemplate("{HHMMSS}"));
-        Assert.Contains("{label} is not known", BackupPlanner.ValidateTemplate("{YYMMDD}_{label}"));
-        Assert.Contains("{date} is not known", BackupPlanner.ValidateTemplate("{date}_{card}")); // only through UpgradeTemplate
+        Assert.Contains("{label} is not a known part of a pattern", BackupPlanner.ValidateTemplate("{YYMMDD}_{label}"));
+        Assert.Contains("{date} is not a known part of a pattern", BackupPlanner.ValidateTemplate("{date}_{card}")); // only through UpgradeTemplate
         Assert.NotNull(BackupPlanner.ValidateTemplate("{YYY}"));
         Assert.NotNull(BackupPlanner.ValidateTemplate("{MMM}"));
         Assert.NotNull(BackupPlanner.ValidateTemplate("{-}"));

@@ -151,8 +151,8 @@ public class RunnerTests
         Assert.Equal(1, result.HeldBack);
         Assert.Equal(2, result.StillInSource);
         Assert.False(result.NothingLeftBehind);
-        Assert.Contains("Left in the source (1 file,", JobReports.Summary(state));
-        Assert.Contains(@"Left in the source (not part of this sort) (1 file,", JobReports.Summary(state));
+        Assert.Contains("Left in the source folder (1 file,", JobReports.Summary(state));
+        Assert.Contains(@"Left in the source folder (not part of this sort) (1 file,", JobReports.Summary(state));
     }
 
     [Fact]
@@ -351,7 +351,7 @@ public class JournalTests
         JournalException? whileVerifying = null;
         VerifyResult result = JobVerifier.Verify(t.Journal, new SyncProgress<RunProgress>(p =>
         {
-            if (p.Phase == "Verified") whileVerifying = Record.Exception(() => JobRunner.Open(t.Journal).Dispose()) as JournalException;
+            if (p.Phase == "Check complete") whileVerifying = Record.Exception(() => JobRunner.Open(t.Journal).Dispose()) as JournalException;
         }));
         Assert.True(result.AllGood);
         Assert.True(whileVerifying?.InUse);

@@ -26,13 +26,13 @@ public class BackupTextsTests
         Assert.Equal(ResultTone.Good, v.Tone);
         // Green only says what happened: never advice about the card.
         Assert.Equal("Copied to 2 drives", v.Title);
-        Assert.Equal("All 412 files were copied and checked. The card was not changed.", v.LeftLine);
+        Assert.Equal("The app copied and checked all 412 files. It did not change the card.", v.LeftLine);
         Assert.Null(v.Alarm);
         Assert.Equal("Copied to 1 drive", BackupTexts.CopiedTitle(1));
-        Assert.Equal("The file was copied and checked. The card was not changed.", BackupTexts.AllCheckedLine(1));
+        Assert.Equal("The app copied and checked the file. It did not change the card.", BackupTexts.AllCheckedLine(1));
         // How the copies were checked, and the checksum files, are one click away.
         Assert.Contains(v.Technical, line => line.Contains("SHA-256"));
-        Assert.Contains(v.Technical, line => line == @"E:\Cards\A: ASC MHL checksum files written.");
+        Assert.Contains(v.Technical, line => line == @"E:\Cards\A: the app wrote the ASC MHL checksum files.");
     }
 
     [Fact]
@@ -44,11 +44,11 @@ public class BackupTextsTests
         ResultView v = BackupTexts.Describe(sameDrive);
         Assert.Equal(ResultTone.Attention, v.Tone);
         Assert.Equal("Copied, but not to separate drives", v.Title);
-        Assert.Equal("Don't format the card yet: only 1 of 2 copies is on a drive of its own.", v.Alarm);
+        Assert.Equal("Do not format the card yet: only 1 of 2 copies is on a drive of its own.", v.Alarm);
 
         BackupResult onSource = Result(RunStatus.Completed, Dest(@"C:\Backup\A", 412) with { Serial = 3 }) with { SourceSerial = 3 };
         Assert.Equal(0, onSource.SeparateDrives);
-        Assert.Equal("Don't format the card yet: every copy is on the drive being backed up.", BackupTexts.Describe(onSource).Alarm);
+        Assert.Equal("Do not format the card yet: every copy is on the same drive as the files that you backed up.", BackupTexts.Describe(onSource).Alarm);
 
         BackupResult separate = Result(RunStatus.Completed, Dest(@"E:\A", 412) with { Serial = 7 }, Dest(@"F:\A", 412) with { Serial = 8 }) with { SourceSerial = 3 };
         Assert.Equal(ResultTone.Good, BackupTexts.Describe(separate).Tone);
@@ -56,11 +56,11 @@ public class BackupTextsTests
 
     public static TheoryData<string, BackupResult> NotComplete() => new()
     {
-        { "a destination dropped out", Result(RunStatus.CompletedWithFailures, Dest(@"E:\A", 412), Dest(@"F:\A", 100, ended: false, mhl: false, problem: "The destination F: is full.", halt: HaltReason.TargetFull)) },
+        { "a destination dropped out", Result(RunStatus.CompletedWithFailures, Dest(@"E:\A", 412), Dest(@"F:\A", 100, ended: false, mhl: false, problem: "The backup drive F: is full.", halt: HaltReason.TargetFull)) },
         { "files failed", Result(RunStatus.CompletedWithFailures, Dest(@"E:\A", 410, ended: false, mhl: false, failed: 2)) },
         { "ended early", Result(RunStatus.Closed, Dest(@"E:\A", 200, mhl: false)) },
         { "stopped", Result(RunStatus.Stopped, Dest(@"E:\A", 200, ended: false, mhl: false)) },
-        { "halted", Result(RunStatus.Halted, Dest(@"E:\A", 200, ended: false, mhl: false)) with { Message = "The card (SONY_A was F:) is not connected. Reconnect it." } },
+        { "halted", Result(RunStatus.Halted, Dest(@"E:\A", 200, ended: false, mhl: false)) with { Message = "The card (SONY_A was F:) is not connected. Connect the drive again." } },
         { "left out", Result(RunStatus.Completed, Dest(@"E:\A", 412)) with { LeftOut = 1 } },
         { "added after the preview", Result(RunStatus.Completed, Dest(@"E:\A", 412)) with { NotInBackup = ["DCIM\\X.JPG (added after the preview)"] } },
         { "card not checked again", Result(RunStatus.Completed, Dest(@"E:\A", 412)) with { CardNotRescanned = true } },
@@ -87,16 +87,21 @@ public class BackupTextsTests
             string all = string.Join(" ", new[] { v.Title, v.LeftLine, v.Detail, v.Alarm ?? "", v.Status }.Concat(v.Reasons).Concat(v.Technical));
             Assert.DoesNotContain("safe to format", all, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("can be formatted", all, StringComparison.OrdinalIgnoreCase);
+            // The same claim in active voice: "you can format the card", "you can now format it".
+            Assert.DoesNotMatch(@"(?i)\bcan (now )?format", all);
+            // Any other mention of formatting is a warning ("Do not format the card"), never a permission or an instruction
+            // ("Format the card.", "ready to format", "before you format it").
+            Assert.DoesNotMatch(@"(?i)(?<!\bnot )\bformat", all);
         }
     }
 
     [Fact]
     public void A_destination_that_dropped_out_is_named_with_its_reason()
     {
-        BackupResult r = Result(RunStatus.CompletedWithFailures, Dest(@"E:\A", 412), Dest(@"F:\A", 100, ended: false, mhl: false, problem: "The destination F: is full.", halt: HaltReason.TargetFull));
+        BackupResult r = Result(RunStatus.CompletedWithFailures, Dest(@"E:\A", 412), Dest(@"F:\A", 100, ended: false, mhl: false, problem: "The backup drive F: is full.", halt: HaltReason.TargetFull));
         ResultView v = BackupTexts.Describe(r);
-        Assert.Equal("Finished on 1 of 2 drives - the others need Resume", v.Title);
-        Assert.Contains(v.Reasons, line => line.StartsWith(@"F:\A: 100 of 412 checked") && line.EndsWith("The destination F: is full."));
+        Assert.Equal("Finished on 1 of 2 drives: the other drive needs Resume", v.Title);
+        Assert.Contains(v.Reasons, line => line.StartsWith(@"F:\A: 100 of 412 checked") && line.EndsWith("The backup drive F: is full."));
         Assert.Equal("Complete copies: 1 of 2.", v.LeftLine);
     }
 
@@ -114,7 +119,7 @@ public class BackupTextsTests
     [Fact]
     public void The_mode_descriptions_say_what_each_mode_does()
     {
-        Assert.Contains("never changed", BackupTexts.BackupDescription);
+        Assert.Contains("only reads the card and never changes it", BackupTexts.BackupDescription);
         Assert.Contains("moves the videos (or the photos)", BackupTexts.SortDescription);
         Assert.Equal("Back up 412 files to 2 drives", BackupTexts.StartButton(412, 2));
         Assert.Equal("Add 38 files, check all 450", BackupTexts.TopUpStartButton(38, 450));
@@ -133,10 +138,10 @@ public class BackupTextsTests
         ResultView v = BackupTexts.Describe(r);
         Assert.Equal(ResultTone.Good, v.Tone);
         Assert.Equal("Copied to 2 drives", v.Title);
-        Assert.Equal("38 new files copied, all 412 files checked. The card was not changed.", v.LeftLine);
-        Assert.Equal("Nothing new to copy, all 1 file checked. The card was not changed.", BackupTexts.TopUpCheckedLine(0, 0, 1));
-        Assert.Equal("2 new files copied, 1 copied again, all 9 files checked. The card was not changed.", BackupTexts.TopUpCheckedLine(2, 1, 9));
-        Assert.Equal("1 file copied again, all 9 files checked. The card was not changed.", BackupTexts.TopUpCheckedLine(0, 1, 9));
+        Assert.Equal("The app copied 38 new files and checked all 412 files. It did not change the card.", v.LeftLine);
+        Assert.Equal("There was nothing new to copy. The app checked the file. It did not change the card.", BackupTexts.TopUpCheckedLine(0, 0, 1));
+        Assert.Equal("The app copied 2 new files, copied 1 other file again and checked all 9 files. It did not change the card.", BackupTexts.TopUpCheckedLine(2, 1, 9));
+        Assert.Equal("The app copied 1 file again and checked all 9 files. It did not change the card.", BackupTexts.TopUpCheckedLine(0, 1, 9));
     }
 
     [Fact]
@@ -148,12 +153,12 @@ public class BackupTextsTests
         ResultView v = BackupTexts.Describe(r);
         Assert.Equal(ResultTone.Good, v.Tone); // every file of the card is verified on both
         string all = string.Join("\n", v.Reasons);
-        Assert.Contains(@"2 camera index files changed on the card since the earlier backup: copied again. The old versions are kept in _IVAROffload\replaced", all);
-        Assert.Contains("3 files no longer in the backup folder (moved out by a sort, or deleted) were copied again from the card.", all);
-        Assert.Contains(@"1 copy in F:\A no longer matched its checksum (damaged on E: since the earlier backup)", all);
-        Assert.Contains("4 files in the backup are no longer on the card: they stay in the backup, verified.", all);
-        Assert.Contains("1 file of the earlier backup is neither on the card nor in the backup folder", all);
-        Assert.Contains("a new ASC MHL history was started", all);
+        Assert.Contains(@"2 camera index files changed on the card after the earlier backup. The app copied them again and kept the old versions in _IVAROffload\replaced", all);
+        Assert.Contains("3 files were no longer in the backup folder (a sort moved them to a different folder, or someone deleted them). The app copied them again from the card.", all);
+        Assert.Contains(@"1 copy in F:\A no longer matched its checksum: it became damaged on E: after the earlier backup.", all);
+        Assert.Contains("4 files in the backup are no longer on the card. They stay in the backup, and the app checked them.", all);
+        Assert.Contains("1 file from the earlier backup is not on the card and not in the backup folder any more", all);
+        Assert.Contains("the app started a new ASC MHL history", all);
     }
 
     [Fact]

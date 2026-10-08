@@ -81,8 +81,8 @@ public class InFlightTests
         {
             Assert.Equal(1, result.MissingFromSource);
             Assert.False(result.NothingLeftBehind);
-            Assert.Contains($"Missing from the source (removed by something else; not in the target either) (1 file, ", summary);
-            Assert.DoesNotContain($"    {item.Rel}  (", summary[..summary.IndexOf("Missing from the source (", StringComparison.Ordinal)]);
+            Assert.Contains($"Missing from the source folder (something else removed them, and they are not in the target folder either) (1 file, ", summary);
+            Assert.DoesNotContain($"    {item.Rel}  (", summary[..summary.IndexOf("Missing from the source folder (", StringComparison.Ordinal)]);
         }
         // Every other file moved as usual.
         foreach (string rel in shas.Keys.Where(r => r.EndsWith(".MOV", StringComparison.Ordinal) && !r.Equals(item.Rel, StringComparison.OrdinalIgnoreCase)))
@@ -131,7 +131,7 @@ public class InFlightTests
         Assert.Contains(Path.GetFileName(kept), after.Note);
         Assert.True(after.IsMissing);
         Assert.Equal(item.Rel + JobPaths.UnverifiedCopySuffix, after.SetAside);
-        Assert.Contains("Unverified copies kept in the target", JobReports.Summary(state));
+        Assert.Contains("Copies in the target folder that the job never checked", JobReports.Summary(state));
         Assert.Equal(1, result.MissingFromSource);
         Assert.DoesNotContain(state.StillInSource, i => i.Index == item.Index);
 
@@ -142,7 +142,7 @@ public class InFlightTests
         Assert.False(again.NothingLeftBehind);
         Assert.True(File.Exists(kept));
         JobState ended = JournalReader.Read(t.Journal);
-        Assert.Contains($"a copy was kept in the target as {item.Rel}{JobPaths.UnverifiedCopySuffix}", JobReports.Summary(ended));
+        Assert.Contains($"the job kept a copy in the target folder as {item.Rel}{JobPaths.UnverifiedCopySuffix}", JobReports.Summary(ended));
     }
 
     [Theory]

@@ -103,16 +103,17 @@ public static class JobReports
         sb.AppendLine(string.Join(sep, "status", "source", "destination", "size_bytes", "sha256", "method", "modified_utc", "detail", "time"));
         // While the job runs, a file not moved at the time of writing may have moved since; not while it is interrupted.
         string? asOf = state.IsEnded ? null
-            : interrupted ? $"not moved yet: the job was interrupted (as of {Now()}); Resume continues it"
-            : $"as of {Now()}, while the job was running - it may be in the destination by now";
+            : interrupted ? $"not moved yet at {Now()}: the job stopped before the end. Resume continues it"
+            : $"status at {Now()}, when the job was in progress. The file can be in the target folder now";
         foreach (JobItem item in state.Items)
         {
-            string detail = (item.Note ?? "") + (item.SetAside is { } kept ? $" (a copy was kept as {Path.Join(state.Header.Target, kept)})" : "");
+            string detail = (SkipReasons.Current(item.Note) ?? "") + (item.SetAside is { } kept ? $" (the job kept a copy as {Path.Join(state.Header.Target, kept)})" : "");
             if (asOf is not null && item.Stage is not (ItemStage.Done or ItemStage.Skipped) && !item.Failed)
             {
                 // A file that was being moved when the job was interrupted is in the source or in the target: Resume decides.
                 string note = interrupted && item.Stage != ItemStage.Pending
-                    ? $"it was being moved when the job was interrupted (as of {Now()}) - it is in the source or already in the destination; Resume finishes it"
+                    ? $"the job stopped during the move of this file (status at {Now()}). The file is in the source folder or already in the target folder. "
+                      + "Resume finishes the move"
                     : asOf;
                 detail = detail.Length > 0 ? $"{detail} ({note})" : note;
             }
@@ -153,53 +154,55 @@ public static class JobReports
         if (state.IsUndo)
         {
             sb.AppendLine($"Undoes:    sort job {h.UndoesId} ({h.UndoesJournal})");
-            sb.AppendLine($"Moving:    the {Planner.Word(h.Mode)} of that sort, and the files that belong to them, back to where they were");
+            sb.AppendLine($"Returns:   the {Planner.Word(h.Mode)} of that sort, and the files that belong to them, to where they were");
         }
         else
-            sb.AppendLine($"Moving:    {Planner.Word(h.Mode)} and the files that belong to them");
+            sb.AppendLine($"Moves:     {Planner.Word(h.Mode)} and the files that belong to them");
         sb.AppendLine(h.Method == TransferMethod.Rename
-            ? "Method:    same drive - files were renamed into place (file data never copied)" + (h.CompareIds ? "; each move confirmed by NTFS file id" : "")
-            : "Method:    different drives - each file was copied and read back from disk, and the original was read a second time; "
-              + "both had to match the SHA-256 before the original was deleted");
-        sb.AppendLine($"Checksums: {(h.Verify ? "SHA-256 recorded for every file" : "not recorded")}");
+            ? "Method:    same drive: the job renamed each file into place and did not copy the file data."
+              + (h.CompareIds ? " It used the NTFS file ID to check each move." : "")
+            : "Method:    different drives: the job copied each file and read the copy again from the disk. It also read the original a second time. "
+              + "The job deleted an original only after the copy and the second read both matched the SHA-256.");
+        sb.AppendLine($"Checksums: {(h.Verify ? "SHA-256 for every file" : "not recorded")}");
         sb.AppendLine($"Started:   {h.Created}  on {h.Machine} by {h.User}");
-        sb.AppendLine($"Status:    {(state.End is { } end ? $"{end.What} {end.At}" : "not finished (can be resumed)")}");
+        sb.AppendLine($"Status:    {(state.End is { } end ? $"{end.What} {end.At}" : "not finished (you can resume it)")}");
         if (state.UndoneBy is { } undo)
-            sb.AppendLine($"Undone:    {(undo.IsFinished ? $"by undo job {undo.JobId} ({undo.Status} {UndoFactory.Date(undo.At)})" : $"an undo job was started: {undo.JobId}")}");
+            sb.AppendLine($"Undone:    {(undo.IsFinished ? $"by undo job {undo.JobId} ({undo.Status} {UndoFactory.Date(undo.At)})" : $"an undo job started: {undo.JobId}")}");
         sb.AppendLine();
         sb.AppendLine($"Moved:     {moved.Count:N0} files, {Format.Bytes(moved.Sum(i => i.Size))}");
         sb.AppendLine($"Skipped:   {skipped.Count:N0}" + (identical > 0
-            ? state.IsUndo ? $" ({identical:N0} because they were already back)" : $" ({identical:N0} because an identical copy was already in the target)"
+            ? state.IsUndo ? $" ({identical:N0} because they were already back)" : $" ({identical:N0} because an identical copy was already in the target folder)"
             : ""));
         sb.AppendLine($"Failed:    {failed.Count:N0}");
         if (notMoved > 0) sb.AppendLine($"Not moved: {notMoved:N0}");
         // An undo's "source" is the sorted folder; its files that did not go back are not necessarily still there.
-        string leftTitle = state.IsUndo ? "Not moved back" : "Left in the source";
+        string leftTitle = state.IsUndo ? "Not returned" : "Left in the source folder";
         int withCopy = left.Count(i => i.Failed && i.Stage == ItemStage.Placed);
         RescanRecord? rescan = state.IsUndo ? null : state.Rescan;
         if (left.Count == 0 && held.Count == 0)
-            sb.AppendLine(state.IsUndo ? "Not moved back: nothing."
-                : rescan is { Left.Count: > 0 } ? "Still in source: none of the files this sort planned to move."
-                : "Still in source: nothing that should have moved.");
+            sb.AppendLine(state.IsUndo ? "Not returned: nothing."
+                : rescan is { Left.Count: > 0 } ? "Still in the source folder: none of the files that this sort planned to move."
+                : "Still in the source folder: no files to move.");
         else if (state.IsUndo)
-            sb.AppendLine($"Not moved back: {Files(left.Count)} ({Format.Bytes(left.Sum(i => i.Size))}) - see '{leftTitle}' below.");
+            sb.AppendLine($"Not returned: {Files(left.Count)} ({Format.Bytes(left.Sum(i => i.Size))}). For the list, see '{leftTitle}' below.");
         else
         {
             if (left.Count > 0)
-                sb.AppendLine($"Still in source: {Files(left.Count)} ({Format.Bytes(left.Sum(i => i.Size))}) that should have moved {(left.Count == 1 ? "is" : "are")} still in the source (not moved)"
-                    + (withCopy > 0 ? $"; {withCopy:N0} of them also {(withCopy == 1 ? "has" : "have")} a verified copy in the target" : "")
-                    + $" - see '{leftTitle}' below.");
+                sb.AppendLine($"Still in the source folder: {Files(left.Count)} ({Format.Bytes(left.Sum(i => i.Size))}) that this sort planned to move, but did not move."
+                    + (withCopy > 0 ? $" {withCopy:N0} of them also {(withCopy == 1 ? "has" : "have")} a checked copy in the target folder." : "")
+                    + $" For the list, see '{leftTitle}' below.");
             if (held.Count > 0)
-                sb.AppendLine($"{(left.Count > 0 ? "Also still" : "Still")} in source: {Files(held.Count)} ({Format.Bytes(held.Sum(h => h.Size))}) of the {Planner.Word(h.Mode)} side "
-                    + $"{(held.Count == 1 ? "was" : "were")} kept there by the preview and not moved - see '{HeldTitle}' below.");
+                sb.AppendLine($"{(left.Count > 0 ? "Also still" : "Still")} in the source folder: {Files(held.Count)} ({Format.Bytes(held.Sum(h => h.Size))}) of the {Planner.Word(h.Mode)} side. "
+                    + $"The preview kept {(held.Count == 1 ? "it" : "them")} there, so the job did not move {(held.Count == 1 ? "it" : "them")}. For the list, see '{HeldTitle}' below.");
         }
         if (rescan is not null)
             sb.AppendLine(RescanLine(rescan));
         if (missing.Count > 0)
-            sb.AppendLine($"Missing:   {Files(missing.Count)} ({Format.Bytes(missing.Sum(i => i.Size))}) disappeared from {(state.IsUndo ? "the sorted folder" : "the source")} "
-                + $"before {(missing.Count == 1 ? "it" : "they")} could be moved (removed by something else) - {(missing.Count == 1 ? "it is" : "they are")} in neither folder; "
-                + $"see '{MissingTitle(state)}' below.");
-        foreach (var group in skipped.Where(i => !i.IsMissing).GroupBy(i => i.Note ?? "").OrderByDescending(g => g.Count()))
+            sb.AppendLine($"Missing:   {Files(missing.Count)} ({Format.Bytes(missing.Sum(i => i.Size))}) disappeared from "
+                + $"{(state.IsUndo ? "the target folder of the sort" : "the source folder")} before the job could move {(missing.Count == 1 ? "it" : "them")}. "
+                + $"Something else removed {(missing.Count == 1 ? "it, and it is" : "them, and they are")} in neither folder. "
+                + $"For the list, see '{MissingTitle(state)}' below.");
+        foreach (var group in skipped.Where(i => !i.IsMissing).GroupBy(i => SkipReasons.Current(i.Note) ?? "").OrderByDescending(g => g.Count()))
             sb.AppendLine($"  skipped x{group.Count()}: {group.Key}");
         if (failed.Count > 0)
         {
@@ -216,7 +219,7 @@ public static class JobReports
                 sb.AppendLine($"  {group.Key} - {Files(group.Count())}, {Format.Bytes(group.Sum(i => i.Size))}:");
                 foreach (JobItem item in group)
                     sb.AppendLine($"    {item.Rel}  ({Format.Bytes(item.Size)})"
-                        + (item.Failed && item.Stage == ItemStage.Placed ? "  - a verified copy is also in the target" : ""));
+                        + (item.Failed && item.Stage == ItemStage.Placed ? "  (a checked copy is also in the target folder)" : ""));
             }
         }
         if (held.Count > 0)
@@ -225,14 +228,14 @@ public static class JobReports
             sb.AppendLine($"{HeldTitle} ({Files(held.Count)}, {Format.Bytes(held.Sum(f => f.Size))}):");
             foreach (var group in held.GroupBy(f => f.Why).OrderByDescending(g => g.Count()))
             {
-                sb.AppendLine($"  {(group.Key.Length > 0 ? group.Key : "kept in the source by the preview")} - {Files(group.Count())}, {Format.Bytes(group.Sum(f => f.Size))}:");
+                sb.AppendLine($"  {(group.Key.Length > 0 ? group.Key : "the preview kept them in the source folder")} - {Files(group.Count())}, {Format.Bytes(group.Sum(f => f.Size))}:");
                 foreach (HeldFile f in group) sb.AppendLine($"    {f.Rel}  ({Format.Bytes(f.Size)})");
             }
         }
         if (rescan is { Left.Count: > 0 })
         {
             sb.AppendLine();
-            sb.AppendLine($"{RescanTitle} ({Files(rescan.Left.Count)}, {Format.Bytes(rescan.Left.Sum(f => f.Size))}; checked {Format.JobDate(rescan.At)}):");
+            sb.AppendLine($"{RescanTitle} ({Files(rescan.Left.Count)}, {Format.Bytes(rescan.Left.Sum(f => f.Size))}, check on {Format.JobDate(rescan.At)}):");
             foreach (var group in rescan.Left.GroupBy(f => f.Why).OrderByDescending(g => g.Count()))
             {
                 sb.AppendLine($"  {group.Key} - {Files(group.Count())}, {Format.Bytes(group.Sum(f => f.Size))}:");
@@ -242,7 +245,7 @@ public static class JobReports
         if (rescan is { Unreadable.Count: > 0 })
         {
             sb.AppendLine();
-            sb.AppendLine("Folders of the source that could not be read when it was checked again (what is in them was not checked):");
+            sb.AppendLine("Folders in the source folder that the check after the job could not read (the check did not include what is in them):");
             foreach (string folder in rescan.Unreadable) sb.AppendLine($"  {folder}");
         }
         if (missing.Count > 0)
@@ -250,7 +253,7 @@ public static class JobReports
             sb.AppendLine();
             sb.AppendLine($"{MissingTitle(state)} ({Files(missing.Count)}, {Format.Bytes(missing.Sum(i => i.Size))}):");
             foreach (JobItem item in missing)
-                sb.AppendLine($"    {item.Rel}  ({Format.Bytes(item.Size)})" + (item.SetAside is { } kept ? $"  - a copy was kept in the target as {kept}" : ""));
+                sb.AppendLine($"    {item.Rel}  ({Format.Bytes(item.Size)})" + (item.SetAside is { } kept ? $"  (the job kept a copy in the target folder as {kept})" : ""));
         }
         var setAside = state.Items.Where(i => i.SetAside is not null).ToList();
         foreach (var kind in setAside.GroupBy(SetAsideKind))
@@ -260,59 +263,63 @@ public static class JobReports
             foreach (JobItem item in kind) sb.AppendLine($"  {item.SetAside}");
         }
         sb.AppendLine();
-        sb.AppendLine($"Every file is listed with its checksum in {Path.GetFileName(JobPaths.ManifestPath(state.JournalPath))}.");
-        sb.AppendLine($"The complete step-by-step log is {Path.GetFileName(state.JournalPath)}.");
-        sb.AppendLine("A checksum can be checked in PowerShell with:  Get-FileHash -Algorithm SHA256 <file>");
+        sb.AppendLine($"{Path.GetFileName(JobPaths.ManifestPath(state.JournalPath))} lists every file with its checksum.");
+        sb.AppendLine($"The job log with every step is {Path.GetFileName(state.JournalPath)}.");
+        sb.AppendLine(ChecksumHint);
         return sb.ToString();
     }
+
+    /// <summary>The last line of the summary and of the receipt: how to calculate a checksum without the app.</summary>
+    private const string ChecksumHint = "To calculate the checksum of a file in PowerShell, use this command:  Get-FileHash -Algorithm SHA256 <file>";
 
     /// <summary>"1 file", "12 files".</summary>
     internal static string Files(int count) => count == 1 ? "1 file" : $"{count:N0} files";
 
-    private const string HeldTitle = "Left in the source (not part of this sort)";
-    private const string RescanTitle = "Found in the source when it was checked again after the job";
+    private const string HeldTitle = "Left in the source folder (not part of this sort)";
+    private const string RescanTitle = "In the source folder at the check after the job";
 
     /// <summary>The summary's line about the check of the source after the job (<see cref="SourceCheck.Record"/>).</summary>
     private static string RescanLine(RescanRecord rescan)
     {
         string when = Format.JobDate(rescan.At);
         if (rescan.NotChecked is { } why)
-            return $"Checked:   the source could not be checked again after the job ({why}), so files added to it after the preview, or online-only ones, "
-                + "were not looked for.";
+            return $"Checked:   IVAR Offload could not check the source folder again after the job ({why}). "
+                + "It did not try to find files that came into the folder after the preview, or online-only files.";
         string unreadable = rescan.Unreadable.Count == 0 ? ""
-            : $" {Format.Count(rescan.Unreadable.Count, "folder")} of the source could not be read, so what is in {(rescan.Unreadable.Count == 1 ? "it" : "them")} "
-              + "was not checked - see below.";
+            : $" IVAR Offload could not read {Format.Count(rescan.Unreadable.Count, "folder")} in the source folder, so it did not check what is in "
+              + $"{(rescan.Unreadable.Count == 1 ? "it" : "them")}. For the list, see below.";
         if (rescan.Left.Count == 0)
-            return $"Checked:   the source was scanned again after the job ({when}): nothing else that should move was found.{unreadable}";
+            return $"Checked:   IVAR Offload scanned the source folder again after the job ({when}) and found nothing else to move.{unreadable}";
         int n = rescan.Left.Count;
-        return $"Also still in source: {Files(n)} ({Format.Bytes(rescan.Left.Sum(f => f.Size))}) that should move {(n == 1 ? "was" : "were")} found when the source "
-            + $"was scanned again after the job ({when}), not part of this sort - see '{RescanTitle}' below."
+        return $"Also still in the source folder: {Files(n)} ({Format.Bytes(rescan.Left.Sum(f => f.Size))}) to move, not part of this sort. "
+            + $"IVAR Offload found {(n == 1 ? "it" : "them")} when it scanned the source folder again after the job ({when}). For the list, see '{RescanTitle}' below."
             + (rescan.MovableNow > 0 ? $" A new sort of the folder can move {Format.Count(rescan.MovableNow, "file")} now." : "")
             + unreadable;
     }
     private static string MissingTitle(JobState state) => state.IsUndo
-        ? "Missing from the sorted folder (removed by something else; not back in the original place either)"
-        : "Missing from the source (removed by something else; not in the target either)";
+        ? "Missing from the target folder of the sort (something else removed them, and they are not back in their original place)"
+        : "Missing from the source folder (something else removed them, and they are not in the target folder either)";
 
     /// <summary>The heading for copies kept in the target under another name, by the suffix they were given and why.</summary>
     private static string SetAsideKind(JobItem item)
     {
         string rel = item.SetAside!;
         if (FailReasons.IsMadeBy(item.Note, FailReasons.VerifiedCopyKeptNotChecked))
-            return "Verified copies kept under another name in the target (the job was ended while their originals could not be checked, and another file "
-                + "has their name; the originals were not touched):";
+            return "Checked copies with a different name in the target folder. You ended the job when it could not check their originals, and another file "
+                + "has their name. The job did not touch the originals:";
         if (FailReasons.IsMadeBy(item.Note, FailReasons.DamagedCopyKeptNotChecked))
-            return "Copies kept in the target that do not match their checksum (the job was ended while their originals could not be checked; the originals "
-                + "were not touched):";
+            return "Copies in the target folder that do not match their checksum. You ended the job when it could not check their originals. "
+                + "The job did not touch the originals:";
         return rel.Contains(JobPaths.UnverifiedCopySuffix, StringComparison.OrdinalIgnoreCase)
-            ? "Unverified copies kept in the target (never checked - their originals disappeared while they were copied, or the job was ended while the source could not be reached):"
+            ? "Copies in the target folder that the job never checked. Their originals disappeared during the copy, or you ended the job when the source folder "
+              + "was not available:"
             : rel.Contains(JobPaths.VerifiedCopySuffix, StringComparison.OrdinalIgnoreCase)
-                ? "Verified copies kept under another name in the target (their originals are gone, and another file has their name):"
-                : "Damaged copies set aside in the target (the target drive changed them after they were verified):";
+                ? "Checked copies with a different name in the target folder (their originals are gone, and another file has their name):"
+                : "Damaged copies with a different name in the target folder (the target drive changed them after the job checked them):";
     }
 
     private static string LeftReason(JobItem item) =>
-        item.Note is { Length: > 0 } note ? note : item.Stage == ItemStage.Pending ? "not moved yet (the job is not finished)" : "interrupted (the job is not finished)";
+        SkipReasons.Current(item.Note) is { Length: > 0 } note ? note : item.Stage == ItemStage.Pending ? "not moved yet (the job is not finished)" : "interrupted (the job is not finished)";
 
     // ---- Receipt in the source ------------------------------------------------------------------------------
 
@@ -363,7 +370,7 @@ public static class JobReports
         string logFolder = Path.GetDirectoryName(Path.GetFullPath(state.JournalPath)) ?? JobPaths.LogFolder(h.Target);
 
         var sb = new StringBuilder();
-        sb.AppendLine("IVAR Offload - files moved out of this folder");
+        sb.AppendLine("IVAR Offload - files that moved out of this folder");
         sb.AppendLine(new string('=', 60));
         sb.AppendLine(state.IsUndo
             ? $"On {when}, IVAR Offload moved {Files(moved.Count)} ({Format.Bytes(moved.Sum(i => i.Size))}) out of this folder, back to where they were before sort job {h.UndoesId}:"
@@ -373,28 +380,31 @@ public static class JobReports
         sb.AppendLine("Each file kept its folder path, so a file that was in <From>\\a\\b is now in <To>\\a\\b.");
         string asOf = Now();
         if (!state.IsEnded && interrupted)
-            sb.AppendLine($"The job is not finished: it was interrupted, and can be resumed or ended in IVAR Offload. This receipt was brought up to date from the job's log "
-                + $"at {asOf}, while the job was not running. It is brought up to date again when the job continues or ends.");
+            sb.AppendLine($"The job is not finished: it stopped before the end. You can resume it or end it in IVAR Offload. IVAR Offload updated this receipt "
+                + $"from the job log at {asOf}, when the job was not in progress. IVAR Offload updates it again when the job continues or ends.");
         else if (!state.IsEnded)
-            sb.AppendLine($"The job is not finished yet. This receipt was written at {asOf}, while the job was running: files it lists as not moved had not moved "
-                + $"at that time, and may have been moved to {h.Target} since - if one is not in this folder, look for it there. "
-                + "The receipt is brought up to date when the job continues or ends.");
+            sb.AppendLine($"The job is not finished. IVAR Offload wrote this receipt at {asOf}, during the job. Files that the list shows as \"not moved\" did not move "
+                + $"before that time, but they can be in {h.Target} now. If a file is not in this folder, look in {h.Target}. "
+                + "IVAR Offload updates the receipt when the job continues or ends.");
         // Interrupted mid-file: that file is in this folder or already in the target (the job's log can't tell until Resume looks).
         List<JobItem> inFlight = state.IsEnded || !interrupted ? [] : left.Where(i => i.Stage != ItemStage.Pending && !i.Failed).ToList();
         var here = left.Except(inFlight).ToList();
         if (here.Count > 0)
             sb.AppendLine(state.IsEnded || interrupted
-                ? $"{Files(here.Count)} ({Format.Bytes(here.Sum(i => i.Size))}) that were planned to move {(here.Count == 1 ? "is" : "are")} still in this folder - the status column of the list says why."
-                : $"{Files(here.Count)} ({Format.Bytes(here.Sum(i => i.Size))}) that were planned to move had not left this folder at {asOf} - the status column of the list says why.");
+                ? $"{Files(here.Count)} ({Format.Bytes(here.Sum(i => i.Size))}) that the job planned to move {(here.Count == 1 ? "is" : "are")} still in this folder. "
+                  + "The status column of the list shows why."
+                : $"{Files(here.Count)} ({Format.Bytes(here.Sum(i => i.Size))}) that the job planned to move did not leave this folder before {asOf}. "
+                  + "The status column of the list shows why.");
         if (inFlight.Count > 0)
-            sb.AppendLine($"{Files(inFlight.Count)} {(inFlight.Count == 1 ? "was" : "were")} being moved when the job was interrupted (\"interrupted\" in the list): "
-                + $"{(inFlight.Count == 1 ? "it is" : "each is")} in this folder or already in {h.Target} - Resume (or ending the job) finishes {(inFlight.Count == 1 ? "it" : "them")}.");
+            sb.AppendLine($"The job stopped during the move of {Files(inFlight.Count)} (\"interrupted\" in the list). "
+                + $"{(inFlight.Count == 1 ? "This file is" : "Each of these files is")} in this folder or already in {h.Target}. "
+                + "To finish the move, resume the job or end it.");
         if (state.HeldBack.Count > 0)
-            sb.AppendLine($"{Files(state.HeldBack.Count)} ({Format.Bytes(state.HeldBack.Sum(f => f.Size))}) of the {Planner.Word(h.Mode)} side {(state.HeldBack.Count == 1 ? "was" : "were")} not moved and {(state.HeldBack.Count == 1 ? "is" : "are")} still in this folder "
-                + "(\"held back\" in the list, with the reason - usually a DIFFERENT file with the same name was already in the target).");
+            sb.AppendLine($"{Files(state.HeldBack.Count)} ({Format.Bytes(state.HeldBack.Sum(f => f.Size))}) of the {Planner.Word(h.Mode)} side did not move and {(state.HeldBack.Count == 1 ? "is" : "are")} still in this folder "
+                + "(\"held back\" in the list, with the reason). Usually, a DIFFERENT file with the same name was already in the target folder.");
         if (missing.Count > 0)
-            sb.AppendLine($"{Files(missing.Count)} ({Format.Bytes(missing.Sum(i => i.Size))}) disappeared from this folder before {(missing.Count == 1 ? "it" : "they")} could be moved (\"missing\" in the list): "
-                + $"{(missing.Count == 1 ? "it is" : "they are")} not in {h.Target} either.");
+            sb.AppendLine($"{Files(missing.Count)} ({Format.Bytes(missing.Sum(i => i.Size))}) disappeared from this folder before the job could move {(missing.Count == 1 ? "it" : "them")} "
+                + $"(\"missing\" in the list). {(missing.Count == 1 ? "It is" : "They are")} not in {h.Target} either.");
         bool undone = state.UndoneBy is { Status: "completed" };
         if (state.UndoneBy is { IsFinished: true } undo)
         {
@@ -404,15 +414,16 @@ public static class JobReports
                 ? "its log is next to this file"
                 : $"its log is in {undoLog}";
             sb.AppendLine(undone
-                ? $"This sort was undone on {UndoFactory.Date(undo.At)} (undo job {undo.JobId}, {where}): the files that could go back were moved back here."
-                : $"An undo of this sort was ended early on {UndoFactory.Date(undo.At)} (undo job {undo.JobId}, {where}): some of its files were moved back here.");
+                ? $"On {UndoFactory.Date(undo.At)}, undo job {undo.JobId} undid this sort ({where}). It returned to this folder every file that it could return."
+                : $"An undo of this sort ended early on {UndoFactory.Date(undo.At)} (undo job {undo.JobId}, {where}). It returned some of the files to this folder.");
         }
         sb.AppendLine();
-        sb.AppendLine($"Every file is listed with where it went and its SHA-256 checksum in {h.Id}{JobPaths.ReceiptCsvSuffix} (opens in Excel).");
-        sb.AppendLine("A checksum can be checked in PowerShell with:  Get-FileHash -Algorithm SHA256 <file>");
+        sb.AppendLine($"{h.Id}{JobPaths.ReceiptCsvSuffix} lists every file with its new location and its SHA-256 checksum (you can open it in Excel).");
+        sb.AppendLine(ChecksumHint);
         sb.AppendLine();
-        if (state.IsUndo) sb.AppendLine("This was an undo. It cannot be undone itself; to separate the files again, run a new sort.");
-        else if (!undone) sb.AppendLine($"To undo: open IVAR Offload, click \"Undo a previous sort...\", then \"Open a log file...\" and pick this file (or the job log in {logFolder}).");
+        if (state.IsUndo) sb.AppendLine("This was an undo, and you cannot undo it. To separate the files again, start a new sort.");
+        else if (!undone) sb.AppendLine($"To undo this sort, start IVAR Offload. Click \"Undo a sort...\". Then click \"Open a log file...\". "
+            + $"Select this file, or the job log in {logFolder}.");
         sb.AppendLine();
         sb.AppendLine($"Job: {h.Id}");
         sb.AppendLine($"{ReceiptJournalLabel}{Path.GetFullPath(state.JournalPath)}");
@@ -474,7 +485,7 @@ public static class JobVerifier
             int matched = 0;
             var problems = new List<string>();
             if (state.UndoneBy is { } undo)
-                problems.Add($"This sort was undone (undo job {undo.JobId}, {undo.Status}), so its files are no longer expected in the target.");
+                problems.Add($"Undo job {undo.JobId} ({undo.Status}) undid this sort, so the check does not expect its files in the target folder.");
             var clock = System.Diagnostics.Stopwatch.StartNew();
             long lastReport = 0;
             foreach (JobItem item in items)
@@ -487,7 +498,7 @@ public static class JobVerifier
                 else if (item.Sha256 is null)
                 {
                     if (now.LastWriteTime == (item.SeenLastWriteTime ?? item.LastWriteTime)) matched++;
-                    else problems.Add($"modified since the move: {path}");
+                    else problems.Add($"changed after the move: {path}");
                 }
                 else
                 {
@@ -500,7 +511,7 @@ public static class JobVerifier
                             lastReport = clock.ElapsedMilliseconds;
                             double rate = clock.Elapsed.TotalSeconds > 0.25 ? done / clock.Elapsed.TotalSeconds : 0;
                             progress.Report(new RunProgress(items.Count, matched + problems.Count, matched, 0, problems.Count, total, done,
-                                item.Rel, "Verifying", rate, rate > 0 ? TimeSpan.FromSeconds((total - done) / rate) : null));
+                                item.Rel, "Check in progress", rate, rate > 0 ? TimeSpan.FromSeconds((total - done) / rate) : null));
                         }
                     }, ct));
                     done = before + item.Size;
@@ -510,13 +521,14 @@ public static class JobVerifier
             }
             var notMoved = state.StillInSource.ToList();
             foreach (JobItem item in notMoved)
-                problems.Add($"not moved (still in the source): {Path.Join(state.Header.Source, item.Rel)} - {item.Note ?? "not moved yet"}");
+                problems.Add($"not moved (still in the source folder): {Path.Join(state.Header.Source, item.Rel)} - {SkipReasons.Current(item.Note) ?? "not moved yet"}");
             foreach (HeldFile held in state.HeldBack)
-                problems.Add($"held back by the preview (still in the source): {Path.Join(state.Header.Source, held.Rel)} - {held.Why}");
+                problems.Add($"kept in the source folder by the preview: {Path.Join(state.Header.Source, held.Rel)} - {held.Why}");
             foreach (JobItem item in state.Missing)
-                problems.Add($"missing (removed from the source before it was moved; not in the target either): {Path.Join(state.Header.Source, item.Rel)}"
-                    + (item.SetAside is { } kept ? $" - a copy was kept as {Path.Join(target, kept)}" : ""));
-            progress?.Report(new RunProgress(items.Count, items.Count, matched, 0, problems.Count, total, total, null, "Verified", 0, null));
+                problems.Add($"missing (something else removed it from the source folder before the move, and it is not in the target folder either): "
+                    + Path.Join(state.Header.Source, item.Rel)
+                    + (item.SetAside is { } kept ? $" - the job kept a copy as {Path.Join(target, kept)}" : ""));
+            progress?.Report(new RunProgress(items.Count, items.Count, matched, 0, problems.Count, total, total, null, "Check complete", 0, null));
 
             try
             {

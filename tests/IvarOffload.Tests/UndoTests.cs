@@ -63,9 +63,9 @@ public class UndoTests
         Assert.Contains("already undone", UndoFactory.Preview(sort).Blocked);
         // The sort's receipt says it was undone (in words, with a readable date) and no longer offers an undo.
         string receipt = File.ReadAllText(JobPaths.ReceiptTextPath(t.Source, original.Header.Id));
-        Assert.Contains($"This sort was undone on {UndoFactory.Date(original.UndoneBy!.At)}", receipt);
+        Assert.Contains($"On {UndoFactory.Date(original.UndoneBy!.At)}, undo job {original.UndoneBy.JobId} undid this sort", receipt);
         Assert.Contains("its log is next to this file", receipt);
-        Assert.DoesNotContain("To undo:", receipt);
+        Assert.DoesNotContain("To undo this sort", receipt);
     }
 
     [Fact]
@@ -141,15 +141,15 @@ public class UndoTests
         using var t = new TestTree();
         Sample(t);
         Assert.Throws<SimulatedCrash>(() => t.Run(t.Plan(), new CrashAt("after-rename", 3)));
-        Assert.Contains("has not finished", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal)).Message);
-        Assert.Contains("has not finished", UndoFactory.Preview(t.Journal).Blocked);
+        Assert.Contains("This sort is not finished yet", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal)).Message);
+        Assert.Contains("This sort is not finished yet", UndoFactory.Preview(t.Journal).Blocked);
 
         Assert.Equal(RunStatus.Completed, TestTree.Resume(t.Journal).Status);
         string undo = UndoFactory.CreateUndoJournal(t.Journal);
-        Assert.Contains("already being undone", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal)).Message);
+        Assert.Contains("An undo of this sort is already in progress", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal)).Message);
         Assert.Equal(RunStatus.Completed, TestTree.Resume(undo).Status);
         Assert.Contains("already undone", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(t.Journal)).Message);
-        Assert.Contains("An undo can't be undone", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(undo)).Message);
+        Assert.Contains("You cannot undo an undo", Assert.Throws<JournalException>(() => UndoFactory.CreateUndoJournal(undo)).Message);
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class UndoTests
             using JobRunner runner = JobRunner.Open(undo, new RunOptions { Faults = new CrashAt("after-placed", 4) });
             runner.Run();
         });
-        Assert.Contains("already being undone", UndoFactory.Preview(t.Journal).Blocked);
+        Assert.Contains("An undo of this sort is already in progress", UndoFactory.Preview(t.Journal).Blocked);
 
         Assert.Equal(RunStatus.Completed, TestTree.Resume(undo).Status);
         AssertAllBack(t, before);
@@ -221,7 +221,7 @@ public class UndoTests
         Assert.Equal(1, first.StillInSource);
         Assert.False(first.NothingLeftBehind);
         Assert.Equal(SkipReasons.NotInSortedFolder, JournalReader.Read(first.JournalPath).Items.Single(i => i.Stage == ItemStage.Skipped).Note);
-        Assert.Contains("Not moved back: 1 file", JobReports.Summary(JournalReader.Read(first.JournalPath)));
+        Assert.Contains("Not returned: 1 file", JobReports.Summary(JournalReader.Read(first.JournalPath)));
 
         // The folder is put back: a new undo takes what the first one left.
         MoveFolder(mine, Path.Join(t.Target, "Other"));
@@ -274,7 +274,7 @@ public class UndoTests
         Assert.Null(preview.Blocked);
         Assert.True(preview.DriveLetterChanged);
         Assert.True(JobPaths.SamePath(t.Source, preview.To));
-        Assert.Contains(preview.Describe(), l => l.Contains("another letter now"));
+        Assert.Contains(preview.Describe(), l => l.Contains("has a different letter now"));
         using (JobRunner runner = UndoFactory.Start(t.Journal)) Assert.True(runner.Run().NothingLeftBehind);
         AssertAllBack(t, before);
     }
@@ -310,7 +310,7 @@ public class UndoTests
             Assert.Contains(rows, r => r.StartsWith("moved", StringComparison.Ordinal) && r.Contains(Path.Join(t.Target, item.Rel)) && r.Contains(item.Sha256!));
         string receipt = File.ReadAllText(text);
         Assert.Contains("moved 8 files", receipt);
-        Assert.Contains("Undo a previous sort", receipt);
+        Assert.Contains("Click \"Undo a sort...\"", receipt);
         Assert.Equal(Path.GetFullPath(t.Journal), UndoFactory.ResolveJournal(csv));
         Assert.Equal(Path.GetFullPath(t.Journal), UndoFactory.ResolveJournal(text));
         Assert.Equal(Path.GetFullPath(t.Journal), UndoFactory.ResolveJournal(JobPaths.SummaryPath(t.Journal)));

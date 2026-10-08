@@ -35,10 +35,10 @@ public class ReportsTests
         string receipt = JobPaths.ReceiptTextPath(t.Source, id), csv = JobPaths.ReceiptCsvPath(t.Source, id);
         Assert.True(File.Exists(receipt) && File.Exists(csv), "no receipt in the source after a crash");
         string text = File.ReadAllText(receipt);
-        Assert.Contains("The job is not finished yet", text);
+        Assert.Contains("The job is not finished. ", text);
         // Written while the job ran: it says when, and that files it lists as not moved may have moved since.
-        Assert.Contains("This receipt was written at ", text);
-        Assert.Contains($"may have been moved to {t.Target} since", text);
+        Assert.Contains("IVAR Offload wrote this receipt at ", text);
+        Assert.Contains($"but they can be in {t.Target} now", text);
         Assert.DoesNotContain("are still in this folder", text);
         Assert.Contains(Path.GetFullPath(t.Journal), text);
         Assert.Contains($"Job log drive serial number: {state.Header.TargetSerial:X8}", text);
@@ -46,18 +46,18 @@ public class ReportsTests
         Assert.Equal(1 + state.Items.Count, rows.Length); // every planned file, with where it goes
         JobItem first = state.Items[0];
         Assert.Contains(rows, r => r.StartsWith("moved", StringComparison.Ordinal) && r.Contains(Path.Join(t.Target, first.Rel)));
-        Assert.Contains(rows, r => r.StartsWith("not moved", StringComparison.Ordinal) && r.Contains("it may be in the destination by now"));
-        Assert.DoesNotContain(rows, r => r.StartsWith("moved", StringComparison.Ordinal) && r.Contains("as of "));
+        Assert.Contains(rows, r => r.StartsWith("not moved", StringComparison.Ordinal) && r.Contains("The file can be in the target folder now"));
+        Assert.DoesNotContain(rows, r => r.StartsWith("moved", StringComparison.Ordinal) && (r.Contains("status at ") || r.Contains("not moved yet at ")));
         Assert.True(File.Exists(JobPaths.ManifestPath(t.Journal)));
-        Assert.Contains("not finished (can be resumed)", File.ReadAllText(JobPaths.SummaryPath(t.Journal)));
+        Assert.Contains("not finished (you can resume it)", File.ReadAllText(JobPaths.SummaryPath(t.Journal)));
         // Written whole or not at all: nothing half-written is left behind.
         Assert.Empty(Directory.EnumerateFiles(t.Root, "*.writing", SearchOption.AllDirectories));
 
         Assert.Equal(RunStatus.Completed, TestTree.Resume(t.Journal).Status);
         text = File.ReadAllText(receipt);
         Assert.Contains("moved 4 files", text);
-        Assert.DoesNotContain("This receipt was written at ", text);
-        Assert.DoesNotContain(File.ReadAllLines(csv), r => r.Contains("as of "));
+        Assert.DoesNotContain("IVAR Offload wrote this receipt at ", text);
+        Assert.DoesNotContain(File.ReadAllLines(csv), r => r.Contains("status at ") || r.Contains("not moved yet at "));
     }
 
     [Fact]
@@ -98,10 +98,10 @@ public class ReportsTests
         Assert.Equal(held, state.StillInSourceCount);
         Assert.Empty(state.StillInSource); // never part of the run: nothing to resume, nothing to undo
         string summary = JobReports.Summary(state);
-        Assert.DoesNotContain("nothing that should have moved", summary);
-        Assert.Contains($"Left in the source (not part of this sort) ({JobReports.Files(held)}, ", summary);
+        Assert.DoesNotContain("Still in the source folder: no files to move.", summary);
+        Assert.Contains($"Left in the source folder (not part of this sort) ({JobReports.Files(held)}, ", summary);
         Assert.Contains(@"day\C0001.MP4", summary);
-        Assert.Contains("a DIFFERENT file with the same name is already in the target", summary);
+        Assert.Contains("a DIFFERENT file with the same name is already in the target folder", summary);
 
         string receipt = File.ReadAllText(JobPaths.ReceiptTextPath(t.Source, state.Header.Id));
         Assert.Contains($"{JobReports.Files(held)} (", receipt);
@@ -112,7 +112,7 @@ public class ReportsTests
         VerifyResult verify = JobVerifier.Verify(t.Journal);
         Assert.False(verify.AllGood);
         Assert.Equal(held, verify.HeldBack);
-        Assert.Contains(verify.Problems, p => p.StartsWith("held back by the preview (still in the source): ", StringComparison.Ordinal) && p.Contains(@"day\C0001.MP4"));
+        Assert.Contains(verify.Problems, p => p.StartsWith("kept in the source folder by the preview: ", StringComparison.Ordinal) && p.Contains(@"day\C0001.MP4"));
         Assert.True(UndoFactory.Preview(t.Journal).CanRun);
         Assert.Single(UndoFactory.Preview(t.Journal).GoingBack);
     }

@@ -155,7 +155,7 @@ Scenario 'backup to two destinations: preview, copy, verified (one drive: never 
     Wait-Until { (Backup-Title $root) -ne '' } 180000 'the backup to finish'
     $title = Backup-Title $root
     if ($title -ne 'Copied, but not to separate drives') { throw "title: '$title'" }
-    if ((Get-Text $root 'BackupResultLeftLine') -ne ("All {0:N0} files were copied and checked. The card was not changed." -f $expected)) { throw "left line: '$(Get-Text $root 'BackupResultLeftLine')'" }
+    if ((Get-Text $root 'BackupResultLeftLine') -ne ("The app copied and checked all {0:N0} files. It did not change the card." -f $expected)) { throw "left line: '$(Get-Text $root 'BackupResultLeftLine')'" }
     if ((Test-Visible $root 'BackupResultGoodIcon') -or -not (Test-Visible $root 'BackupResultWarningIcon')) { throw 'copies on one drive show as green' }
     Shot $p '21-backup-done'
     $a = Assert-BackupCopy $src (Join-Path $d1 $name); Assert-BackupCopy $src (Join-Path $d2 $name) | Out-Null
@@ -210,7 +210,7 @@ Scenario 'the same card again: a name pattern, and the preview offers to check i
     Wait-Until { Test-Visible $root 'BackupTemplateBox' } 5000 'the name pattern box'
     Set-Text $root 'BackupTemplateBox' '{YYMMDD}_{nope}'
     Start-Sleep -Milliseconds 900
-    if ((Get-Text $root 'BackupTemplateError') -notlike '*{nope} is not known*') { throw "no error for an unknown part: '$(Get-Text $root 'BackupTemplateError')'" }
+    if ((Get-Text $root 'BackupTemplateError') -notlike '*{nope} is not a known part of a pattern*') { throw "no error for an unknown part: '$(Get-Text $root 'BackupTemplateError')'" }
     if ((Get-FolderName $root) -ne $taken) { throw 'a pattern that is not valid changed the name' }
     Set-Text $root 'BackupTemplateBox' 'Shoot {card} {YYYY-MM-DD} {HHMM}'
     Start-Sleep -Milliseconds 900
@@ -223,13 +223,13 @@ Scenario 'the same card again: a name pattern, and the preview offers to check i
     Wait-Until { Test-Visible $root 'BackupStartButton' } 60000 'the preview of the same card'
     if (-not (Test-Visible $root 'BackupTopUpText')) { throw 'the preview does not say the card was already backed up' }
     if (-not (Test-Selected $root 'BackupTopUpChoice')) { throw 'checking against the earlier backup is not chosen' }
-    if ((Get-Text $root 'BackupTopUpText') -notlike "Adding to the backup of *$first*no file is missing from it*") { throw "offer: '$(Get-Text $root 'BackupTopUpText')'" }
+    if ((Get-Text $root 'BackupTopUpText') -notlike "This backup adds files to the backup from *$first*No file is missing from it*") { throw "offer: '$(Get-Text $root 'BackupTopUpText')'" }
     if (-not (Test-TextShown $root 'Check all * files')) { throw 'Start does not say it only verifies' }
     Shot $p '25-backup-already-backed-up'
     # A new full backup instead: the folder name from the pattern.
     Select-Radio $root 'BackupFullChoice'
     Start-Sleep -Milliseconds 400
-    if ((Get-Text $root 'BackupTopUpText') -notlike "This card was backed up on *$first*It holds every file of the card*") { throw "offer (full): '$(Get-Text $root 'BackupTopUpText')'" }
+    if ((Get-Text $root 'BackupTopUpText') -notlike "There is a backup of this card from *$first*It contains all files of the card*") { throw "offer (full): '$(Get-Text $root 'BackupTopUpText')'" }
     if (-not (Test-TextShown $root 'Back up * files to 1 drive')) { throw 'choosing a new full backup did not change Start' }
     if ((Get-Text $root 'BackupStartLine') -notlike "*$name*") { throw "a new full backup does not go to '$name': '$(Get-Text $root 'BackupStartLine')'" }
     # Back to the default pattern, remembered for the scenarios after this one.
@@ -271,17 +271,17 @@ Scenario 'the same card shot on since: add the new files to its backup, verify t
     if (-not (Test-Visible $root 'BackupTopUpText')) { throw 'no offer to add to the earlier backup' }
     if (-not (Test-Selected $root 'BackupTopUpChoice')) { throw 'adding to the earlier backup is not chosen by default' }
     $offer = Get-Text $root 'BackupTopUpText'
-    if ($offer -notlike "Adding to the backup of *$name*2 new files are copied, 1 changed file is copied again*") { throw "offer: '$offer'" }
+    if ($offer -notlike "This backup adds files to the backup from *$name*It copies 2 new files. It copies 1 changed file again.*") { throw "offer: '$offer'" }
     if (-not (Test-TextShown $root 'Add 3 files, check all *')) { throw 'Start does not say what it adds' }
-    if ((Get-Text $root 'BackupStartLine') -notlike "Adding to: *$name*") { throw "line above Start: '$(Get-Text $root 'BackupStartLine')'" }
+    if ((Get-Text $root 'BackupStartLine') -notlike "Will add to: *$name*") { throw "line above Start: '$(Get-Text $root 'BackupStartLine')'" }
     Shot $p '26-backup-top-up-offer'
     Invoke-Button $root 'BackupStartButton'
     Wait-Until { (Backup-Title $root) -like 'Copied*' } 120000 'the top-up to finish'
     $title = Backup-Title $root
     # The sample is on the drive it is backed up to: verified, but not a separate copy (never green).
     $left = Get-Text $root 'BackupResultLeftLine'
-    if ($title -ne 'Copied, but not to separate drives' -or $left -notlike '2 new files copied, 1 copied again, all * files checked*') { throw "result: '$title' / '$left'" }
-    if (-not (Test-TextShown $root '*1 photo or clip changed on the card since the earlier backup (usually another shot with a reused number)*')) { throw 'the result does not name the changed shot' }
+    if ($title -ne 'Copied, but not to separate drives' -or $left -notlike 'The app copied 2 new files, copied 1 other file again and checked all * files*') { throw "result: '$title' / '$left'" }
+    if (-not (Test-TextShown $root '*1 photo or clip changed on the card after the earlier backup (usually another shot with a reused number)*')) { throw 'the result does not name the changed shot' }
     Shot $p '27-backup-top-up-done'
     $copy = Join-Path $d1 $name
     $same = Assert-BackupCopy $src $copy
@@ -314,11 +314,11 @@ Scenario 'preview, confirm, verify, remove empty folders (same drive)' {
     Wait-Until { (Result-Title $root) -like 'Done*' } 120000 'the move to finish'
     Wait-Checked $root
     if (-not (Test-Visible $root 'ResultGoodIcon')) { throw "the result is not green: $(Result-Title $root) / $(Get-Text $root 'ResultLeftLine')" }
-    if ((Get-Text $root 'ResultLeftLine') -notlike 'Left in the source: nothing that should move*') { throw "left line: '$(Get-Text $root 'ResultLeftLine')'" }
+    if ((Get-Text $root 'ResultLeftLine') -notlike 'Left in the source folder: nothing that needs to move*') { throw "left line: '$(Get-Text $root 'ResultLeftLine')'" }
     Shot $p '03-done'
     Assert-Oracle $target | Out-Null
     Invoke-Button $root 'VerifyButton'
-    Wait-Until { (Result-Title $root) -like 'Verified*' } 120000 'verification'
+    Wait-Until { (Result-Title $root) -like 'Checked again*' } 120000 'verification'
     Shot $p '04-verified'
     Open-More $root 'MoreButton'
     Invoke-Button $root 'RemoveEmptyButton'
@@ -345,11 +345,11 @@ Scenario 'a locked file: the result says it is still in the source, then Resume 
         Wait-Checked $root
         $title = Result-Title $root
         $left = Get-Text $root 'ResultLeftLine'
-        if ($title -notlike 'Not finished - 1 video is still in the source*') { throw "title: '$title'" }
-        if ($left -notlike 'Left in the source: 1 video (*') { throw "left line: '$left'" }
+        if ($title -notlike 'Not finished: 1 video is still in the source folder*') { throw "title: '$title'" }
+        if ($left -notlike 'Left in the source folder: 1 video (*') { throw "left line: '$left'" }
         if ((Test-Visible $root 'ResultGoodIcon') -or -not (Test-Visible $root 'ResultWarningIcon')) { throw 'the result is not amber' }
         Invoke-Button $root 'ShowStillInSourceButton'
-        Wait-Until { (Get-Text $root 'MoveTab') -like 'Still in the source (1)*' } 5000 "the list of files still in the source (tab: '$(Get-Text $root 'MoveTab')')"
+        Wait-Until { (Get-Text $root 'MoveTab') -like 'Still in the source folder (1)*' } 5000 "the list of files still in the source (tab: '$(Get-Text $root 'MoveTab')')"
         Shot $p '11-locked-file-still-in-source'
     } finally { $handle.Dispose() }
     Invoke-Button $root 'ResumeButton'
@@ -387,7 +387,7 @@ Scenario 'the memory-card question: Back up first opens Backup with the card, So
     $dialog = Find-Window $p 'ChoiceDialog'
     # The question says to back the card up first; the safe answer opens the Backup tab with the card chosen.
     $message = Get-Text $dialog 'ChoiceMessage'
-    if ($message -notlike '*memory card or camera drive (F: TEST_CARD)*Back the card up to another drive first, then sort the backup*' -or $message -like '*coming soon*') { throw "question: '$message'" }
+    if ($message -notlike '*memory card or camera drive (F: TEST_CARD)*Back up the card to a different drive first. Then sort the backup*' -or $message -like '*coming soon*') { throw "question: '$message'" }
     Shot $p '13-card-question'
     Invoke-Button $dialog 'ChoicePrimaryButton'   # Back up this card first (the safe default)
     Wait-Until { Test-Selected $root 'BackupTab' } 5000 'the Backup tab'
@@ -400,7 +400,7 @@ Scenario 'the memory-card question: Back up first opens Backup with the card, So
     Wait-Checked $root
     # Never plain green after sorting a card: it still holds everything (the target is on it), so it says to back it up.
     if (Test-Visible $root 'ResultGoodIcon') { throw 'a sorted memory card shows the green result' }
-    if ((Get-Text $root 'ResultAlarm') -notlike 'F: TEST_CARD looks like a memory card*copy the card to another drive and check the copy before you format it.') { throw "alarm: '$(Get-Text $root 'ResultAlarm')'" }
+    if ((Get-Text $root 'ResultAlarm') -notlike 'F: TEST_CARD looks like a memory card*Before you format the card, copy it to a different drive. Then check the copy.') { throw "alarm: '$(Get-Text $root 'ResultAlarm')'" }
     Shot $p '14-card-result'
     Assert-Oracle $target
 }
@@ -417,7 +417,7 @@ if ($OtherVolumeRoot) {
         Invoke-Button $root 'StopButton'
         Wait-Until { (Result-Title $root) -like 'Stopped*' } 60000 'the stop'
         Wait-Until { Test-Visible $root 'ResumeButton' } 5000 'the resume banner'
-        if ((Get-Text $root 'StatusText') -notlike '*safe to unplug*') { throw "status after stop: '$(Get-Text $root 'StatusText')'" }
+        if ((Get-Text $root 'StatusText') -notlike '*safe to disconnect*') { throw "status after stop: '$(Get-Text $root 'StatusText')'" }
         Shot $p '08-stopped'
         Invoke-Button $root 'ResumeButton'
         Wait-Until { (Result-Title $root) -like 'Done*' } 300000 'the resumed move to finish'

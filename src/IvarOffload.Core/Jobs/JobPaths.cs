@@ -287,16 +287,17 @@ public static class JobPaths
     /// </summary>
     public static string WhyNotReachable(string journalPath, uint serial, string driveName)
     {
-        if (!DriveIsThere(journalPath, serial)) return $"The drive with this job's log ({driveName}) is not connected. Connect it, then try again.";
-        string open = $"open the job log inside the renamed folder ({Path.Join(LogFolderNameOf(journalPath), Path.GetFileName(journalPath))}), or choose that folder.";
+        if (!DriveIsThere(journalPath, serial)) return $"The drive with the log of this job ({driveName}) is not connected. Connect it. Then try again.";
+        string open = $"open the job log in the renamed folder ({Path.Join(LogFolderNameOf(journalPath), Path.GetFileName(journalPath))}), or choose that folder.";
         if (serial != 0)
-            return $"The job log is no longer at {journalPath}. Its drive ({driveName}) is connected, so the sorted folder was probably renamed, moved or deleted. "
+            return $"The job log is no longer at {journalPath}. Its drive ({driveName}) is connected, so someone probably renamed, moved or deleted the target folder. "
                    + char.ToUpperInvariant(open[0]) + open[1..];
         string letter = Drives.Letter(journalPath);
         string which = string.Equals(driveName, letter, StringComparison.OrdinalIgnoreCase) ? "" : $" ({driveName})";
-        return $"The job log is no longer at {journalPath}. A drive is connected at {letter}, but it is not known whether it is the drive that holds the log{which}: "
-               + "the sorted folder may have been renamed, moved or deleted, or the drive with the log may be unplugged and another drive given its letter. "
-               + $"Plug in the drive with the log, or {open}";
+        return $"The job log is no longer at {journalPath}. A drive is connected at {letter}, but it is not clear if this drive is the drive that holds the log{which}. "
+               + "It is possible that someone renamed, moved or deleted the target folder. "
+               + "It is also possible that the drive with the log is disconnected, and a different drive has its letter now. "
+               + $"Connect the drive with the log, or {open}";
     }
 
     /// <summary>Jobs in a target folder that were started but not finished.</summary>

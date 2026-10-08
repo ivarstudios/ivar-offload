@@ -102,7 +102,7 @@ public sealed class JournalException(string message, Exception? inner = null, bo
 public sealed class JournalWriter : IDisposable
 {
     public const string InUseMessage =
-        "This job is open in another IVAR Offload window (or a command-line run). Wait until it has finished there, then try again.";
+        "This job is open in another IVAR Offload window (or in a command-line run). Wait until the job is finished there. Then try again.";
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -168,7 +168,7 @@ public sealed class JournalWriter : IDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ObjectDisposedException)
         {
-            throw new JournalException($"Could not write to the job log ({Path}): {e.Message}", e);
+            throw new JournalException($"A write to the job log ({Path}) failed: {e.Message}", e);
         }
     }
 
@@ -429,7 +429,7 @@ public static class JournalReader
             }
             if (state is null)
             {
-                if (record.Type != "job") throw new JournalException($"Not an IVAR Offload job log: {path}");
+                if (record.Type != "job") throw new JournalException($"This file is not an IVAR Offload job log: {path}");
                 state = new JobState { JournalPath = path, Header = ToHeader(record) };
             }
             else
@@ -487,8 +487,8 @@ public static class JournalReader
     private static JobHeader ToHeader(JournalRecord r) => new()
     {
         Id = r.JobId ?? "",
-        Source = r.Source ?? throw new JournalException("Job log header has no source folder."),
-        Target = r.Target ?? throw new JournalException("Job log header has no target folder."),
+        Source = r.Source ?? throw new JournalException("The header of the job log has no source folder."),
+        Target = r.Target ?? throw new JournalException("The header of the job log has no target folder."),
         Mode = Enum.Parse<MoveMode>(r.Mode ?? nameof(MoveMode.Videos), ignoreCase: true),
         Method = Enum.Parse<TransferMethod>(r.Method ?? nameof(TransferMethod.Copy), ignoreCase: true),
         Verify = r.Verify ?? true,
@@ -525,11 +525,11 @@ public static class JournalReader
     {
         if (r.Type == "item")
         {
-            if (r.Index != state.Items.Count) throw new JournalException($"Job log items are out of order: {path}");
+            if (r.Index != state.Items.Count) throw new JournalException($"The items in the job log are not in the correct order: {path}");
             state.Items.Add(new JobItem
             {
                 Index = r.Index.Value,
-                Rel = r.Rel ?? throw new JournalException($"Job log item {r.Index} has no path: {path}"),
+                Rel = r.Rel ?? throw new JournalException($"Item {r.Index} in the job log has no path: {path}"),
                 Size = r.Size ?? 0,
                 CreationTime = r.CreationTime ?? 0,
                 LastWriteTime = r.LastWriteTime ?? 0,
@@ -544,7 +544,7 @@ public static class JournalReader
         JobItem? item = null;
         if (r.Index is int index)
         {
-            if (index < 0 || index >= state.Items.Count) throw new JournalException($"Job log refers to unknown item {index}: {path}");
+            if (index < 0 || index >= state.Items.Count) throw new JournalException($"The job log refers to item {index}, which does not exist: {path}");
             item = state.Items[index];
         }
 

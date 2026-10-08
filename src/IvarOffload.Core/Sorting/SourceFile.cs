@@ -51,13 +51,13 @@ public static class FileNotes
         FileNote.UnmatchedAudio => "Audio recording - goes with the videos",
         FileNote.FollowsByName => "Unrecognized type - follows the video with its name",
         FileNote.LivePhoto => "Live Photo clip",
-        FileNote.LivePhotoTooLarge => "Too large for a Live Photo clip - treated as a video",
+        FileNote.LivePhotoTooLarge => "Video - too large for a Live Photo clip",
         FileNote.InProject => "Inside an editing/processing project",
-        FileNote.DifferentInTarget => "DIFFERENT file with the same name in the target - stays",
-        FileNote.HeldWithGroup => "Stays with its clip (name clash in the target)",
-        FileNote.NotLivePhoto => "Same name as a photo, but not a Live Photo clip - treated as a video",
+        FileNote.DifferentInTarget => "DIFFERENT file with the same name in the target folder - stays",
+        FileNote.HeldWithGroup => "Stays with its clip (name clash in the target folder)",
+        FileNote.NotLivePhoto => "Video - same name as a photo, but not a Live Photo clip",
         FileNote.SurveyData => "Survey data (GNSS base station or ground control points)",
-        FileNote.HyperlapseFrame => "Hyperlapse source frame",
+        FileNote.HyperlapseFrame => "Hyperlapse frame",
         _ => "",
     };
 

@@ -2,38 +2,41 @@ namespace IvarOffload.Core.Jobs;
 
 /// <summary>
 /// Why a planned file was skipped (a final state: the file stays where it is). The texts are written to the job log
-/// and shown to the user, so they must stay stable: older logs are read with the same helpers.
+/// and shown to the user after "3 files: " (no capital, no final period). Logs written by older versions hold older
+/// texts: read a skip reason from a log with <see cref="Current"/> and the helpers below, never by comparing it with a
+/// constant directly. <see cref="SourceGone"/> never changes (Journal.cs compares it directly).
 /// </summary>
 public static class SkipReasons
 {
-    public const string IdenticalInTarget = "an identical copy already exists in the target (source kept)";
-    public const string DifferentInTarget = "a different file with the same name exists in the target (source kept)";
-    public const string SameNameAndSizeInTarget = "a file with the same name and size exists in the target (source kept)";
-    public const string FolderInTarget = "a folder with the same name exists in the target (source kept)";
-    public const string AppearedDuringMove = "a file appeared in the target during the move (source kept)";
-    public const string AppearedDuringCopy = "a file appeared in the target during the copy (source kept)";
-    public const string ChangedAfterPreview = "the source file changed after the preview (left in place)";
-    public const string ChangedDuringMove = "the source file changed during the move (left in place)";
+    public const string IdenticalInTarget = "an identical copy is already in the target folder (the job kept the source file)";
+    public const string DifferentInTarget = "a different file with the same name is in the target folder (the job kept the source file)";
+    public const string SameNameAndSizeInTarget = "a file with the same name and size is in the target folder (the job kept the source file)";
+    public const string FolderInTarget = "a folder with the same name is in the target folder (the job kept the source file)";
+    public const string AppearedDuringMove = "a file appeared in the target folder during the move (the job kept the source file)";
+    public const string AppearedDuringCopy = "a file appeared in the target folder during the copy (the job kept the source file)";
+    public const string ChangedAfterPreview = "the source file changed after the preview (the job does not move a changed file)";
+    public const string ChangedDuringMove = "the source file changed during the move (the job does not move a changed file)";
     /// <summary>
     /// The file disappeared from the source (its folder is still there) before it was moved: something else removed it.
     /// It is in neither folder, so it is reported on its own, never as "still in the source" (see <see cref="JobItem.IsMissing"/>).
+    /// Read back by Journal.cs as it is: never change this text.
     /// </summary>
     public const string SourceGone = "the source file no longer exists";
-    public const string Closed = "not moved - the job was closed before this file was reached";
+    public const string Closed = "not moved because you ended the job early";
 
     // Undo jobs ("target" is the folder the files originally came from).
-    public const string AlreadyBackIdentical = "an identical copy is already back in its original place (this copy was kept)";
-    public const string AlreadyBackDifferent = "a different file is now in its original place - both kept";
-    public const string AlreadyBackSameSize = "a file with the same name and size is now in its original place - both kept";
-    public const string ChangedSinceSorted = "changed since it was sorted - left where it is";
+    public const string AlreadyBackIdentical = "an identical copy is already back in its original place (the undo kept this copy too)";
+    public const string AlreadyBackDifferent = "a different file is now in its original place (the undo kept both files)";
+    public const string AlreadyBackSameSize = "a file with the same name and size is now in its original place (the undo kept both files)";
+    public const string ChangedSinceSorted = "changed after the sort (the undo does not move a changed file)";
     /// <summary>No longer in the sorted folder, and the same file is in its original place (an earlier undo moved it back).</summary>
     public const string AlreadyBack = "already back in its original place";
-    public const string NotInSortedFolder = "no longer in the sorted folder (moved, renamed or deleted since the sort)";
+    public const string NotInSortedFolder = "no longer in the target folder (someone moved, renamed or deleted files there after the sort)";
 
     private const string KeptWithPrefix = "kept with ";
 
     /// <summary>A companion held back because another file of its group (usually its clip) was not moved.</summary>
-    public static string KeptWith(string name) => $"{KeptWithPrefix}{name}, which was not moved";
+    public static string KeptWith(string name) => $"{KeptWithPrefix}{name}, which did not move";
 
     public static bool IsKeptWithGroup(string? reason) => reason?.StartsWith(KeptWithPrefix, StringComparison.Ordinal) == true;
 
@@ -42,24 +45,47 @@ public static class SkipReasons
     /// is a spare copy (or, for an undo, the file is already back). Every other skip means a planned file is still
     /// (only) in the source.
     /// </summary>
-    public static bool IsIdenticalInTarget(string? reason) => reason is IdenticalInTarget or AlreadyBackIdentical or AlreadyBack;
+    public static bool IsIdenticalInTarget(string? reason) => Current(reason) is IdenticalInTarget or AlreadyBackIdentical or AlreadyBack;
+
+    /// <summary>A skip reason from a job log in today's words: the same reason as an older version wrote it becomes the constant above.</summary>
+    public static string? Current(string? reason) => reason switch
+    {
+        "an identical copy already exists in the target (source kept)" => IdenticalInTarget,
+        "a different file with the same name exists in the target (source kept)" => DifferentInTarget,
+        "a file with the same name and size exists in the target (source kept)" => SameNameAndSizeInTarget,
+        "a folder with the same name exists in the target (source kept)" => FolderInTarget,
+        "a file appeared in the target during the move (source kept)" => AppearedDuringMove,
+        "a file appeared in the target during the copy (source kept)" => AppearedDuringCopy,
+        "the source file changed after the preview (left in place)" => ChangedAfterPreview,
+        "the source file changed during the move (left in place)" => ChangedDuringMove,
+        "not moved - the job was closed before this file was reached" => Closed,
+        "an identical copy is already back in its original place (this copy was kept)" => AlreadyBackIdentical,
+        "a different file is now in its original place - both kept" => AlreadyBackDifferent,
+        "a file with the same name and size is now in its original place - both kept" => AlreadyBackSameSize,
+        "changed since it was sorted - left where it is" => ChangedSinceSorted,
+        "no longer in the sorted folder (moved, renamed or deleted since the sort)" => NotInSortedFolder,
+        _ => reason,
+    };
 }
 
 /// <summary>Plain-language errors recorded for files that could not be moved. A failed file stays open for Resume.</summary>
 public static class FailReasons
 {
     public const string SourceReadTwiceDiffers =
-        "The source drive returned different data when read twice - original kept. Check the drive, cable or port.";
-    public const string CopyChangedByOtherProgram = "the copy in the target was changed by another program; both kept";
+        "The source drive gave different data when the job read this file two times, so the job kept the original. Check the drive, the cable and the port.";
+    public const string CopyChangedByOtherProgram = "another program changed the copy in the target folder, so the job kept both files";
     public const string OriginalNotRemovable =
-        "A verified copy is in the target, but the original could not be removed from the source (read-only or no permission). The original was kept.";
-    public const string NotMovable = "The file could not be moved out of the source (read-only or no permission). It was left in place.";
+        "A checked copy is in the target folder, but the job could not delete the original from the source folder (read-only, or no permission). "
+        + "The job kept the original.";
+    public const string NotMovable = "The job could not move the file out of the source folder (read-only, or no permission). The file stays where it is.";
     public const string TooLargeForTarget =
-        "This file is 4 GB or larger and the target drive (FAT32) cannot store files that big. It was left in the source - use an NTFS or exFAT drive for the target.";
+        "This file is 4 GB or larger, and the target drive (FAT32) cannot store a file of this size. The file stays in the source folder. "
+        + "Use an NTFS or exFAT drive for the target folder.";
     public const string StreamsNotSupported =
-        "This file carries extra hidden metadata (alternate data streams, for example Mac Finder tags or labels) that the target drive cannot store. It was left in the source.";
+        "This file has extra hidden metadata (alternate data streams, for example Mac Finder tags or labels) that the target drive cannot store. "
+        + "The file stays in the source folder.";
     public const string OriginalChangedAfterCopy =
-        "The original changed after it was copied, so it was not deleted. Both versions were kept - please check them.";
+        "The original changed after the job copied it, so the job did not delete it. The job kept both versions. Check them.";
     public const string InNeitherPlace = "Interrupted move: the file is in neither the source nor the target.";
     public const string CopyAndOriginalGone = "Interrupted copy: the copy is missing from the target and the original is no longer in the source.";
     public const string PlacedCopyDamagedOriginalGone =
@@ -138,16 +164,16 @@ public static class FailReasons
     private const string WaitingPrefix = "waiting for ";
 
     /// <summary>A file held back because an earlier file of its group could not be moved yet; Resume tries that one first.</summary>
-    public static string WaitingFor(string name) => $"{WaitingPrefix}{name}, which could not be moved yet";
+    public static string WaitingFor(string name) => $"{WaitingPrefix}{name}, which could not move yet";
 
     public static bool IsWaiting(string? reason) => reason?.StartsWith(WaitingPrefix, StringComparison.Ordinal) == true;
 
-    public static string FolderMissing(string folder) => $"the folder {folder} is missing - was it renamed or disconnected?";
+    public static string FolderMissing(string folder) => $"the folder {folder} is missing. Did someone rename it or disconnect its drive?";
 
     private const string DeviceErrorPrefix = "the drive stopped responding while this file was being moved (";
 
     /// <summary>A "device not ready / I/O device error" on this file. The file was left in the source.</summary>
-    public static string DeviceError(string detail) => $"{DeviceErrorPrefix}{detail}) - it was left in the source";
+    public static string DeviceError(string detail) => $"{DeviceErrorPrefix}{detail}). The file is still in the source folder";
 
     public static bool IsDeviceError(string? reason) => reason?.StartsWith(DeviceErrorPrefix, StringComparison.Ordinal) == true;
 }

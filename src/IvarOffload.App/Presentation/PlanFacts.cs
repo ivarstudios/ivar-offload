@@ -17,7 +17,7 @@ public sealed record Attention(int Files, int Libraries, IReadOnlyList<string> P
 public static partial class PlanFacts
 {
     /// <summary>How the Planner's warning about earlier sorts from another folder (or in the other mode) starts.</summary>
-    public const string OtherJobsWarningStart = "This target already holds files sorted from";
+    public const string OtherJobsWarningStart = "This target folder already holds files that an earlier sort moved from";
 
     public const string ClashReason = SourceCheck.ClashReason;
 
@@ -38,7 +38,7 @@ public static partial class PlanFacts
     }
 
     /// <summary>The bold line above Confirm: "Moving videos to: D:\Clients\Smith\Video".</summary>
-    public static string Destination(MovePlan plan) => $"Moving {Planner.Word(plan.Mode)} to: {plan.TargetRoot}";
+    public static string Destination(MovePlan plan) => $"The {Planner.Word(plan.Mode)} will move to: {plan.TargetRoot}";
 
     /// <summary>The target already holds files sorted from another folder or in the other mode (the Planner warns about it).</summary>
     public static bool TargetHoldsOtherJobs(MovePlan plan) =>
@@ -54,20 +54,22 @@ public static partial class PlanFacts
         var all = plan.ToMove.Concat(plan.Staying).ToList();
         int Notes(FileNote note) => all.Count(f => f.Note == note && !identical.Contains(f));
         var parts = new List<string>();
-        void Part(int count, string text)
+        void Part(int count, string one, string? many = null)
         {
-            if (count > 0) parts.Add($"{count:N0} {text}");
+            if (count > 0) parts.Add($"{count:N0} {(count == 1 ? one : many ?? one)}");
         }
-        Part(identical.Count, "already in the target (skipped)");
-        Part(Notes(FileNote.DifferentInTarget), "with a DIFFERENT file of the same name in the target");
-        Part(Notes(FileNote.HeldWithGroup), "staying with their clip");
-        Part(Notes(FileNote.UnknownType), "of an unknown type (they stay)");
-        Part(Notes(FileNote.FollowsByName), "of an unknown type named like a video (they go with it)");
-        Part(Notes(FileNote.Ambiguous), "matching both a photo and a video");
+        Part(identical.Count, "already in the target folder (skipped)");
+        Part(Notes(FileNote.DifferentInTarget), "with a DIFFERENT file of the same name in the target folder");
+        Part(Notes(FileNote.HeldWithGroup), "that stays with its clip", "that stay with their clip");
+        Part(Notes(FileNote.UnknownType), "of an unknown type (it stays)", "of an unknown type (they stay)");
+        Part(Notes(FileNote.FollowsByName), "of an unknown type named like a video (it moves with that video)",
+            "of an unknown type named like a video (they move with that video)");
+        Part(Notes(FileNote.Ambiguous), "that matches both a photo and a video", "that match both a photo and a video");
         Part(Notes(FileNote.OnlineOnly), "online-only");
         Part(Notes(FileNote.InProject), "inside an editing project");
-        Part(Notes(FileNote.LivePhotoTooLarge), "too large for a Live Photo clip (treated as videos)");
-        Part(Notes(FileNote.NotLivePhoto), "named like a photo but not a Live Photo clip (treated as videos)");
+        Part(Notes(FileNote.LivePhotoTooLarge), "too large for a Live Photo clip (it counts as a video)", "too large for a Live Photo clip (they count as videos)");
+        Part(Notes(FileNote.NotLivePhoto), "named like a photo but not a Live Photo clip (it counts as a video)",
+            "named like a photo but not a Live Photo clip (they count as videos)");
         int libraries = plan.Scan.SkippedFolders.Count(s => s.LibraryKind is not null);
         if (libraries > 0) parts.Add($"{RunOutcome.Count(libraries, "application library", "application libraries")} not scanned");
         return new Attention(all.Count(f => NeedsLook(f, identical)), libraries, parts);
@@ -107,7 +109,7 @@ public static partial class PlanFacts
     /// messages that may be scrolled away. Null when the source is not flagged.
     /// </summary>
     public static string? CardLine(MovePlan plan) => plan.MemoryCard is not { } card ? null
-        : SourceGuards.MemoryCardWarning(card) + (DestinationOnCard(plan) ? " The target is on it too, so nothing leaves the card." : "");
+        : SourceGuards.MemoryCardWarning(card) + (DestinationOnCard(plan) ? " The target folder is on it too, so nothing leaves the card." : "");
 
     /// <summary>The preview's messages, without the memory-card warning (<see cref="CardLine"/> shows it).</summary>
     public static IReadOnlyList<PlanMessage> ShownMessages(MovePlan plan) => plan.MemoryCard is { } card
@@ -116,8 +118,8 @@ public static partial class PlanFacts
 
     /// <summary>Why the destination line above Confirm is amber (its tooltip); null when it is not.</summary>
     public static string? DestinationWarning(MovePlan plan) =>
-        DestinationOnCard(plan) ? "The target is on the memory card or camera drive itself: nothing leaves it."
-        : TargetHoldsOtherJobs(plan) ? "This target already holds files from another sort - see the messages above."
+        DestinationOnCard(plan) ? "The target folder is on the memory card or camera drive itself: nothing leaves it."
+        : TargetHoldsOtherJobs(plan) ? "This target folder already contains files from a different sort. For details, see the messages above."
         : null;
 
     /// <summary>

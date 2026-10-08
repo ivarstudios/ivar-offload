@@ -267,13 +267,15 @@ public sealed class BackupRunner : IDisposable
                 catch (Exception e) when (e is JournalException { InUse: false } or IOException or UnauthorizedAccessException)
                 {
                     // One damaged log never keeps the other destinations from going on: this one sits out, saying why.
-                    (d.Halt, d.Offline) = (HaltReason.LogMoved, $"The log of this backup on {d.DriveName} can't be read ({e.Message.TrimEnd('.')}). The other destinations go on.");
+                    (d.Halt, d.Offline) = (HaltReason.LogMoved, $"It is not possible to read the log of this backup on {d.DriveName} ({e.Message.TrimEnd('.')}). "
+                        + "The backup continues on the other backup drives.");
                     continue;
                 }
                 if (!state.IsBackup || state.Header.Id != h.Id || !state.PlanComplete)
                 {
                     writer.Dispose();
-                    (d.Halt, d.Offline) = (HaltReason.LogMoved, $"The log in {d.Folder} does not belong to this backup (or was never completed). The other destinations go on.");
+                    (d.Halt, d.Offline) = (HaltReason.LogMoved, $"The log in {d.Folder} is not the log of this backup, or it is not complete. "
+                        + "The backup continues on the other backup drives.");
                     continue;
                 }
                 d.State = state;
@@ -286,13 +288,14 @@ public sealed class BackupRunner : IDisposable
             {
                 reference ??= d.State!.Items;
                 if (d.State!.Items.Count != reference.Count || d.State.Items.Where((item, i) => item.Rel != reference[i].Rel).Any())
-                    throw new JournalException($"The log in {d.Folder} lists other files than the rest of this backup; it was changed. Check the destinations.");
+                    throw new JournalException($"The log in {d.Folder} lists different files than the other logs of this backup. "
+                        + "The log changed after the backup started. Check the backup drives.");
             }
-            if (dests.All(d => d.State?.IsEnded == true)) throw new JournalException("This backup has already finished.");
+            if (dests.All(d => d.State?.IsEnded == true)) throw new JournalException("This backup is already finished.");
             if (!dests.Any(d => d.State is not null))
-                throw new JournalException("None of this backup's logs can be used: " + string.Join(" ", dests.Select(d => d.Offline)));
+                throw new JournalException("It is not possible to use any of the logs of this backup: " + string.Join(" ", dests.Select(d => d.Offline)));
             if (!dests.Any(d => d.Writer is not null))
-                throw new JournalException("None of the destinations that still need copies is connected: "
+                throw new JournalException("No backup drive that still needs copies is connected: "
                     + string.Join(" ", dests.Where(d => d.Offline is not null).Select(d => d.Offline)));
         }
         catch
@@ -423,7 +426,7 @@ public sealed class BackupRunner : IDisposable
         if (status == RunStatus.Completed)
         {
             if (closing) FollowCard();
-            SetPhase("Checking the card again");
+            SetPhase("Second card check in progress");
             (notInBackup, notRescanned) = RescanCard();
         }
         Remember();
@@ -474,7 +477,7 @@ public sealed class BackupRunner : IDisposable
             ? BackupReasons.NotCheckedEnded : BackupReasons.NotCopiedEnded;
 
     private static JobHaltException NoDestinationLeft() =>
-        new(HaltReason.TargetNotConnected, "No destination can be written to any more (see each destination). Fix that, then press Resume. Nothing was lost.");
+        new(HaltReason.TargetNotConnected, "No backup drive can receive data now (see each backup drive). Fix the problem. Then click Resume. No data is lost.");
 
     // ---- One file -------------------------------------------------------------------------------------------
 
@@ -543,7 +546,7 @@ public sealed class BackupRunner : IDisposable
                 FileSnapshot? f = SafeFile.TrySnapshot(dst);
                 if (f is null && t is { IsDirectory: false })
                 {
-                    SetPhase("Verifying");
+                    SetPhase("Check in progress");
                     if (Hash(temp!, t.Size) == item.Sha256)
                     {
                         Place(d, item, temp!, dst, null);
@@ -554,7 +557,7 @@ public sealed class BackupRunner : IDisposable
                 else if (f is { IsDirectory: false } && t is { IsDirectory: false } && item.ReplaceWhy is not null)
                 {
                     // A top-up stopped before the old file was moved aside: the verified copy is put in its place now.
-                    SetPhase("Verifying");
+                    SetPhase("Check in progress");
                     if (Hash(temp!, t.Size) == item.Sha256)
                     {
                         Place(d, item, temp!, dst, null);
@@ -571,7 +574,7 @@ public sealed class BackupRunner : IDisposable
                 {
                     // The verified copy had been renamed into place when the backup stopped: check it again.
                     if (t is { IsDirectory: false }) TryDeleteTemp(temp!);
-                    SetPhase("Verifying");
+                    SetPhase("Check in progress");
                     if (Hash(dst, f.Size) == item.Sha256) Done(d, item);
                     else Fail(d, item, BackupReasons.DifferentInDestination);
                     return Next.None;
@@ -611,7 +614,7 @@ public sealed class BackupRunner : IDisposable
         }
         if (compare.Count == 0) return;
 
-        SetPhase("Verifying");
+        SetPhase("Check in progress");
         Task<(FileSnapshot?, string?)> card = Task.Run(() => ReadCardAgain(src));
         // A copy of another size is not the card's: it is not read (a chain file carries this folder's own history and is never compared).
         var copies = compare.Select(d => Task.Run(() =>
@@ -642,7 +645,7 @@ public sealed class BackupRunner : IDisposable
         (FileSnapshot? snapshot, string? cardSha) = card.Result;
         if (snapshot is null)
         {
-            CardFileProblem(i, compare, src, new Win32IOException(ERROR_FILE_NOT_FOUND, "Reading again", src));
+            CardFileProblem(i, compare, src, new Win32IOException(ERROR_FILE_NOT_FOUND, "The second read", src));
             return;
         }
         if (snapshot.Size != planned.Size || snapshot.LastWriteTime != planned.LastWriteTime)
@@ -665,8 +668,8 @@ public sealed class BackupRunner : IDisposable
                 foreach (Dest d in compare) OnDest(d, d.State!.Items[i], () => Fail(d, d.State!.Items[i], BackupReasons.CardDiffersFromBackup));
                 if (++_sourceMismatches >= 2)
                     throw new JobHaltException(HaltReason.SourceInconsistent,
-                        $"The card is returning inconsistent data: {_sourceMismatches} files read differently each time. "
-                        + "Check the card, the card reader, the cable or the port, then press Resume. Nothing on the card was changed.");
+                        $"The card returns inconsistent data: {_sourceMismatches} files gave different data in each read. "
+                        + "Check the card, the card reader, the cable or the port. Then click Resume. Nothing on the card changed.");
                 return;
             }
             cardChanged = true;
@@ -740,7 +743,7 @@ public sealed class BackupRunner : IDisposable
         // The earlier version of a photo or clip changed on the card (usually another shot whose number the camera used
         // again) stays in view, next to the new one; camera index files and anything else go into the log folder.
         bool beside = why == BackupReasons.AsideChanged && !EarlierBackups.IsCameraIndex(item.Rel);
-        SetPhase("Moving the old version aside");
+        SetPhase("Move of the old version in progress");
         KeptBeside? kept = null;
         for (int n = 1; n < 1000; n++)
         {
@@ -754,7 +757,7 @@ public sealed class BackupRunner : IDisposable
             if (beside && kept is null && SafeFile.TrySnapshot(dst) is { IsDirectory: false } old)
             {
                 // Read now, so the backup folder's checksum list (and later top-ups) can name it with what it holds.
-                SetPhase("Verifying");
+                SetPhase("Check in progress");
                 kept = new KeptBeside(old.Size, old.CreationTime, old.LastWriteTime,
                     SafeFile.ToHex(Retry(() => SafeFile.HashFile(dst, old.Size, AddWork, _ct))), AscMhl.Xxh64OfFile(dst));
             }
@@ -771,16 +774,16 @@ public sealed class BackupRunner : IDisposable
             {
                 int e = SafeFile.TryRename(dst, aside);
                 if (e is ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION or ERROR_ACCESS_DENIED)
-                    throw new Win32IOException(e, "Moving the old version aside", dst);
+                    throw new Win32IOException(e, "The rename of the old version", dst);
                 return e;
             }, retryAccessDenied: true);
             if (error is ERROR_ALREADY_EXISTS or ERROR_FILE_EXISTS) continue;
             if (error is ERROR_FILE_NOT_FOUND or ERROR_PATH_NOT_FOUND && (!CheckDestination(d) || SafeFile.TrySnapshot(dst) is null)) return;
-            if (error != 0) throw new Win32IOException(error, "Moving the old version aside", dst);
+            if (error != 0) throw new Win32IOException(error, "The rename of the old version", dst);
             Fault("after-aside", item.Index);
             return;
         }
-        throw new IOException($"No free name to move {item.Rel} aside.");
+        throw new IOException($"There is no free name to move {item.Rel} aside.");
     }
 
     /// <summary>The earlier version of a file kept next to the new one, in the backup folder (not in its log folder).</summary>
@@ -803,7 +806,7 @@ public sealed class BackupRunner : IDisposable
             Skip(d, item, BackupReasons.KeptGone);
             return;
         }
-        SetPhase("Verifying");
+        SetPhase("Check in progress");
         string? sha = s.Size == item.Size ? SafeFile.ToHex(Retry(() => SafeFile.HashFile(dst, s.Size, AddWork, _ct))) : null;
         if (sha is not null && sha == item.ExpectedSha256)
         {
@@ -848,7 +851,7 @@ public sealed class BackupRunner : IDisposable
         bool unbuffered = true;
         while (true)
         {
-            SetPhase("Copying");
+            SetPhase("Copy in progress");
             SafeFileHandle handle;
             try
             {
@@ -970,7 +973,7 @@ public sealed class BackupRunner : IDisposable
         List<(Dest Dest, string Temp, CopyDestination Target)> written, int attempt)
     {
         if (written.Count == 0) return;
-        SetPhase("Verifying");
+        SetPhase("Check in progress");
         Task<(FileSnapshot?, string?)>? again = _job.Reread ? Task.Run(() => ReadCardAgain(src)) : null;
         var readBacks = written.Select(c => Task.Run(() =>
         {
@@ -1003,7 +1006,7 @@ public sealed class BackupRunner : IDisposable
             if (snapshot is null)
             {
                 foreach (var c in written) TryDeleteTemp(c.Temp);
-                CardFileProblem(i, written.Select(c => c.Dest).ToList(), src, new Win32IOException(ERROR_FILE_NOT_FOUND, "Reading again", src));
+                CardFileProblem(i, written.Select(c => c.Dest).ToList(), src, new Win32IOException(ERROR_FILE_NOT_FOUND, "The second read", src));
                 return;
             }
             if (!snapshot.SameFileAs(source, compareFileId: false)) problem = BackupReasons.ChangedWhileCopied;
@@ -1017,8 +1020,8 @@ public sealed class BackupRunner : IDisposable
                 }
                 if (problem == BackupReasons.CardReadTwiceDiffers && !_closing && ++_sourceMismatches >= 2)
                     throw new JobHaltException(HaltReason.SourceInconsistent,
-                        $"The card is returning inconsistent data: {_sourceMismatches} files read differently the second time. "
-                        + "Check the card, the card reader, the cable or the port, then press Resume. Nothing on the card was changed.");
+                        $"The card returns inconsistent data: {_sourceMismatches} files gave different data in the second read. "
+                        + "Check the card, the card reader, the cable or the port. Then click Resume. Nothing on the card changed.");
                 return;
             }
         }
@@ -1080,8 +1083,8 @@ public sealed class BackupRunner : IDisposable
             {
                 Fail(d, d.State!.Items[i], BackupReasons.CopyMismatchTwice);
                 throw new DestinationHaltException(HaltReason.TargetDamagingFiles,
-                    $"The destination {d.DriveName} is damaging files: a fresh copy of {Path.GetFileName(_plan[i].Rel)} did not match the card twice. "
-                    + "Check that drive, its cable or port, then press Resume. The other destinations went on.");
+                    $"The backup drive {d.DriveName} damages files: a new copy of {Path.GetFileName(_plan[i].Rel)} did not match the card two times. "
+                    + "Check that drive, its cable or port. Then click Resume. The backup continued on the other backup drives.");
             });
     }
 
@@ -1095,12 +1098,12 @@ public sealed class BackupRunner : IDisposable
             MoveAside(d, item, why);
             if (!d.Online) return;
         }
-        SetPhase("Moving into place");
+        SetPhase("Final rename in progress");
         int error = Retry(() =>
         {
             int e = SafeFile.TryRename(temp, dst);
             if (e is ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION or ERROR_ACCESS_DENIED)
-                throw new Win32IOException(e, "Moving into place", temp);
+                throw new Win32IOException(e, "The final rename", temp);
             return e;
         }, retryAccessDenied: true);
         if (error is ERROR_ALREADY_EXISTS or ERROR_FILE_EXISTS)
@@ -1110,7 +1113,7 @@ public sealed class BackupRunner : IDisposable
             return;
         }
         if (error is ERROR_FILE_NOT_FOUND or ERROR_PATH_NOT_FOUND && !CheckDestination(d)) return;
-        if (error != 0) throw new Win32IOException(error, "Moving the verified copy into place", dst);
+        if (error != 0) throw new Win32IOException(error, "The rename of the checked copy", dst);
         Fault("after-place-rename", item.Index);
         if (source is not null) SafeFile.ApplyTimesAndAttributes(dst, source); // guard against NTFS name tunnelling
         Done(d, item);
@@ -1143,9 +1146,9 @@ public sealed class BackupRunner : IDisposable
             foreach (Dest d in dests) OnDest(d, d.State!.Items[i], () => Fail(d, d.State!.Items[i], BackupReasons.CardError(detail)));
             if (again || _closing) return; // the same file again after a resume: a bad spot on the card, not a dropped reader
             throw new JobHaltException(HaltReason.DriveStoppedResponding,
-                $"The card stopped responding ({detail}). Check that it is connected (card reader, cable or port), then press Resume. Nothing on the card was changed.");
+                $"The card did not respond ({detail}). Make sure that it is connected (card reader, cable or port). Then click Resume. Nothing on the card changed.");
         }
-        foreach (Dest d in dests) OnDest(d, d.State!.Items[i], () => Fail(d, d.State!.Items[i], $"The file could not be read from the card: {e.Message}"));
+        foreach (Dest d in dests) OnDest(d, d.State!.Items[i], () => Fail(d, d.State!.Items[i], $"The backup could not read the file from the card: {e.Message}"));
     }
 
     private (FileSnapshot?, string?) ReadCardAgain(string src)
@@ -1192,7 +1195,7 @@ public sealed class BackupRunner : IDisposable
         {
             // A drive that is gone drops out with that reason; one that is there but refuses its log says so.
             if (CheckDestination(d))
-                GoOffline(d, HaltReason.TargetNotConnected, $"The log on {d.DriveName} can't be written ({e.Message}). Check that drive, then press Resume.");
+                GoOffline(d, HaltReason.TargetNotConnected, $"The backup cannot write its log on {d.DriveName} ({e.Message}). Check that drive. Then click Resume.");
         }
         catch (Exception e) when (IOErrors.IsDeviceGone(e))
         {
@@ -1200,7 +1203,7 @@ public sealed class BackupRunner : IDisposable
             string detail = IOErrors.NativeError(e) is int code ? new System.ComponentModel.Win32Exception(code).Message.TrimEnd('.') : e.Message;
             if (item is not null) TryFail(d, item, BackupReasons.DestinationError(detail));
             GoOffline(d, HaltReason.DriveStoppedResponding,
-                $"The destination {d.DriveName} stopped responding ({detail}). Check that it is connected, then press Resume. The other destinations went on.");
+                $"The backup drive {d.DriveName} did not respond ({detail}). Make sure that it is connected. Then click Resume. The backup continued on the other backup drives.");
         }
         catch (Exception e) when (IOErrors.IsDiskFull(e))
         {
@@ -1211,7 +1214,7 @@ public sealed class BackupRunner : IDisposable
                 return;
             }
             if (item is not null) TryFail(d, item, e.Message);
-            GoOffline(d, HaltReason.TargetFull, $"The destination {d.DriveName} is full. Free up space there, then press Resume. The other destinations went on.");
+            GoOffline(d, HaltReason.TargetFull, $"The backup drive {d.DriveName} is full. Make more free space on that drive. Then click Resume. The backup continued on the other backup drives.");
         }
         catch (Exception e) when (IOErrors.IsFileTooLarge(e))
         {
@@ -1226,7 +1229,7 @@ public sealed class BackupRunner : IDisposable
         {
             if (item is not null) TryFail(d, item, e.Message);
             // A step for the whole destination (finishing it) that fails is never silent: it drops out, saying why.
-            else GoOffline(d, HaltReason.TargetNotConnected, $"Finishing the backup on {d.DriveName} failed: {e.Message.TrimEnd('.')}. Fix that, then press Resume.");
+            else GoOffline(d, HaltReason.TargetNotConnected, $"The backup could not finish on {d.DriveName}: {e.Message.TrimEnd('.')}. Fix the problem. Then click Resume.");
         }
     }
 
@@ -1238,7 +1241,7 @@ public sealed class BackupRunner : IDisposable
         }
         catch (Exception e) when (e is JournalException or IOException)
         {
-            GoOffline(d, HaltReason.TargetNotConnected, $"The log on {d.DriveName} can't be written ({e.Message}). Check that drive, then press Resume.");
+            GoOffline(d, HaltReason.TargetNotConnected, $"The backup cannot write its log on {d.DriveName} ({e.Message}). Check that drive. Then click Resume.");
         }
     }
 
@@ -1255,14 +1258,15 @@ public sealed class BackupRunner : IDisposable
         if (!d.Online) return false;
         try
         {
-            JobRunner.CheckRoot(d.Folder, d.Serial, d.Label, "destination", HaltReason.TargetNotConnected);
+            JobRunner.CheckRoot(d.Folder, d.Serial, d.Label, "backup", HaltReason.TargetNotConnected);
             if (!File.Exists(d.JournalPath))
-                throw new JobHaltException(HaltReason.LogMoved, $"The log of this backup is no longer in {d.Folder}. Put it back, then press Resume.");
+                throw new JobHaltException(HaltReason.LogMoved, $"The log of this backup is no longer in {d.Folder}. Return the log to that folder. Then click Resume.");
             return true;
         }
         catch (JobHaltException h)
         {
-            GoOffline(d, h.Reason, h.Message.Replace("Nothing was lost.", "The other destinations went on.", StringComparison.Ordinal));
+            // "Nothing was lost." is the exact text that JobRunner.CheckRoot writes.
+            GoOffline(d, h.Reason, h.Message.Replace("Nothing was lost.", "The backup continued on the other backup drives.", StringComparison.Ordinal));
             return false;
         }
     }
@@ -1287,7 +1291,7 @@ public sealed class BackupRunner : IDisposable
         }
         catch (JobHaltException h)
         {
-            throw new JobHaltException(h.Reason, h.Message.Replace("Nothing was lost.", "Nothing on the card was changed.", StringComparison.Ordinal));
+            throw new JobHaltException(h.Reason, h.Message.Replace("Nothing was lost.", "Nothing on the card changed.", StringComparison.Ordinal));
         }
     }
 
@@ -1295,7 +1299,7 @@ public sealed class BackupRunner : IDisposable
     {
         try
         {
-            JobRunner.CheckRoot(d.Folder, d.Serial, d.Label, "destination", HaltReason.TargetNotConnected);
+            JobRunner.CheckRoot(d.Folder, d.Serial, d.Label, "backup", HaltReason.TargetNotConnected);
             return (HaltReason.LogMoved, $"The log of this backup is missing from {d.Folder}.");
         }
         catch (JobHaltException h)
@@ -1310,12 +1314,12 @@ public sealed class BackupRunner : IDisposable
         if (d.Folders.Contains(folder)) return;
         var missing = new Stack<string>();
         for (string f = folder; !JobPaths.SamePath(f, d.Folder) && !Directory.Exists(f);
-             f = Path.GetDirectoryName(f) ?? throw new IOException($"The folder {folder} is not inside the destination {d.Folder}."))
+             f = Path.GetDirectoryName(f) ?? throw new IOException($"The folder {folder} is not in the backup folder {d.Folder}."))
             missing.Push(f);
         if (missing.Count > 0 && !SafeFile.DirectoryExists(d.Folder))
         {
             CheckDestination(d);
-            throw new DestinationHaltException(d.Halt, d.Offline ?? $"The destination folder {d.Folder} is missing.");
+            throw new DestinationHaltException(d.Halt, d.Offline ?? $"The backup folder {d.Folder} is missing.");
         }
         while (missing.TryPop(out string? f)) Directory.CreateDirectory(f);
         d.Folders.Add(folder);
@@ -1348,8 +1352,8 @@ public sealed class BackupRunner : IDisposable
     {
         if (FreeBytes(d) is not long free || free >= bytes + JobRunner.RunSpaceMargin) return;
         throw new DestinationHaltException(HaltReason.TargetFull,
-            $"The destination {d.DriveName} is full: {Format.Bytes(bytes)} needed for the next file, {Format.Bytes(Math.Max(0, free - JobRunner.RunSpaceMargin))} free. "
-            + "Free up space there, then press Resume. The other destinations went on.");
+            $"The backup drive {d.DriveName} is full: the next file needs {Format.Bytes(bytes)}, and {Format.Bytes(Math.Max(0, free - JobRunner.RunSpaceMargin))} is free. "
+            + "Make more free space on that drive. Then click Resume. The backup continued on the other backup drives.");
     }
 
     // ---- Finishing ------------------------------------------------------------------------------------------
@@ -1363,7 +1367,7 @@ public sealed class BackupRunner : IDisposable
         JobState state = d.State!;
         OnDest(d, null, () =>
         {
-            SetPhase("Writing the checksum files");
+            SetPhase("Write of the checksum files in progress");
             if (how == "completed")
             {
                 foreach (string rel in state.SourceFolders.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
@@ -1378,7 +1382,7 @@ public sealed class BackupRunner : IDisposable
                         .Concat(state.Items.Where(i => i.Stage == ItemStage.Done && IsBeside(i))
                             .Select(i => new MhlFile(i.SetAside!, i.Beside!.Size, i.Beside.LastWriteTime, i.Beside.Xxh64))).ToList();
                     if (files.Any(f => f.Xxh64.Length == 0))
-                        throw new IOException("Some copies have no xxHash64 checksum recorded, so no ASC MHL manifest was written.");
+                        throw new IOException("The log has no xxHash64 checksum for some copies, so the backup did not write an ASC MHL manifest.");
                     try
                     {
                         List<string> written;
@@ -1407,7 +1411,7 @@ public sealed class BackupRunner : IDisposable
                                               && !IOErrors.IsDeviceGone(e) && !IOErrors.IsDiskFull(e))
                     {
                         // The copies are verified; only the checksum files could not be written. Said once, not retried forever.
-                        string why = $"the ASC MHL files could not be written ({e.Message.TrimEnd('.')})";
+                        string why = $"the backup could not write the ASC MHL files ({e.Message.TrimEnd('.')})";
                         Record(d, new JournalRecord { Type = "mhl", What = "skipped", Error = why, At = JournalRecord.Now() });
                         state.MhlSkipped = why;
                     }
@@ -1470,8 +1474,8 @@ public sealed class BackupRunner : IDisposable
         {
             // Never a green result over a history that no longer describes the folder: this destination waits for Resume.
             throw new DestinationHaltException(HaltReason.None,
-                $"The earlier ASC MHL history in {d.Folder} could not be moved aside to start a new one ({e.Message.TrimEnd('.')}). "
-                + "Close any program that has a file in its ascmhl folder open, then press Resume. The copies are verified.");
+                $"The backup could not move the earlier ASC MHL history in {d.Folder} aside to start a new one ({e.Message.TrimEnd('.')}). "
+                + "Close all programs that have a file open in its ascmhl folder. Then click Resume. The backup already checked the copies.");
         }
         Fault("after-mhl-restart", -1);
     }
@@ -1504,8 +1508,9 @@ public sealed class BackupRunner : IDisposable
             if (s is not { IsDirectory: false } || s.Size != item.Size && !updatedChain) gone.Add(item.Rel);
         }
         if (gone.Count > 0)
-            (d.Halt, d.Offline) = (HaltReason.None, $"{gone.Count:N0} file{(gone.Count == 1 ? " that was" : "s that were")} verified here in an earlier run "
-                + $"{(gone.Count == 1 ? "is" : "are")} missing or changed now (e.g. {gone[0]}) - moved by a sort, edited or lost. This copy is not complete any more.");
+            (d.Halt, d.Offline) = (HaltReason.None, $"{gone.Count:N0} file{(gone.Count == 1 ? "" : "s")} that the backup checked here in an earlier run "
+                + $"{(gone.Count == 1 ? "is" : "are")} missing or changed now (for example {gone[0]}). Possible causes: a sort moved {(gone.Count == 1 ? "it" : "them")}, "
+                + $"a program edited {(gone.Count == 1 ? "it" : "them")}, or {(gone.Count == 1 ? "it is" : "they are")} lost. This copy is no longer complete.");
     }
 
     /// <summary>

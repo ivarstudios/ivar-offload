@@ -48,10 +48,10 @@ public sealed record VolumeInfo(string Root, uint SerialNumber, string FileSyste
     public static unsafe VolumeInfo Of(string path)
     {
         string existing = NearestExistingFolder(Unsubst(Path.GetFullPath(path)))
-            ?? throw new DirectoryNotFoundException($"No existing drive or folder found for \"{path}\".");
+            ?? throw new DirectoryNotFoundException($"There is no drive or folder for \"{path}\".");
         char* rootBuffer = stackalloc char[1024];
         if (!GetVolumePathName(existing, rootBuffer, 1024))
-            throw new Win32IOException(Marshal.GetLastPInvokeError(), "Finding the drive", existing);
+            throw new Win32IOException(Marshal.GetLastPInvokeError(), "The search for the drive", existing);
         string root = new(rootBuffer);
 
         char* fsBuffer = stackalloc char[64];

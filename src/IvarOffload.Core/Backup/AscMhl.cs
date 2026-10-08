@@ -287,7 +287,7 @@ public static class AscMhl
     private static History CheckHistory(string root, string history, Tree tree)
     {
         string where = history.Length == 0 ? "the card's top folder" : history;
-        const string NotAdded = "so no ASC MHL manifest was added (the card's files, that history included, are copied and verified as they are)";
+        const string NotAdded = "The backup did not add an ASC MHL manifest. It copied and checked all files of the card (that history too) as they are.";
         string ascFolder = Path.Join(history.Length == 0 ? root : Path.Join(root, history), FolderName);
         string chainPath = Path.Join(ascFolder, ChainFileName);
         List<ChainEntry> chain;
@@ -302,10 +302,10 @@ public static class AscMhl
             {
                 string path = Path.Join(ascFolder, entry.Path);
                 if (!File.Exists(path))
-                    throw new MhlHistoryException($"the card's own ASC MHL history in {where} is incomplete (its manifest {entry.Path} is missing), {NotAdded}") { History = history };
+                    throw new MhlHistoryException($"the card's own ASC MHL history in {where} is not complete: its manifest {entry.Path} is missing. {NotAdded}") { History = history };
                 byte[] bytes = ReadBytes(path);
                 if (!string.Equals(C4(bytes), entry.C4, StringComparison.Ordinal))
-                    throw new MhlHistoryException($"the card's own ASC MHL history in {where} was changed after it was written (its manifest {entry.Path} no longer matches its chain), {NotAdded}") { History = history };
+                    throw new MhlHistoryException($"the card's own ASC MHL history in {where} changed after the earlier offload wrote it: its manifest {entry.Path} no longer matches its chain. {NotAdded}") { History = history };
                 XDocument doc;
                 using (var stream = new MemoryStream(bytes)) doc = XDocument.Load(stream);
                 var patterns = doc.Descendants().Where(e => e.Name.LocalName == "ignore").SelectMany(e => e.Elements()).Select(e => e.Value.Trim()).ToList();
@@ -324,10 +324,10 @@ public static class AscMhl
         }
         catch (Exception e) when (e is XmlException or IOException or UnauthorizedAccessException)
         {
-            throw new MhlHistoryException($"the card's own ASC MHL history in {where} can't be read ({e.Message.TrimEnd('.')}), {NotAdded}", inner: e) { History = history };
+            throw new MhlHistoryException($"the backup cannot read the card's own ASC MHL history in {where} ({e.Message.TrimEnd('.')}). {NotAdded}", inner: e) { History = history };
         }
         if (ignore.FirstOrDefault(p => !KnownIgnore.Contains(p)) is { } custom)
-            throw new MhlHistoryException($"the card's own ASC MHL history in {where} leaves out files by its own pattern (\"{custom}\"), which IVAR Offload can't apply yet, {NotAdded}") { History = history };
+            throw new MhlHistoryException($"the card's own ASC MHL history in {where} uses its own pattern (\"{custom}\") to ignore files, and IVAR Offload cannot apply this pattern yet. {NotAdded}") { History = history };
 
         var changed = new List<string>();
         var missing = new List<string>();
@@ -340,12 +340,12 @@ public static class AscMhl
         }
         if (changed.Count + missing.Count > 0)
             throw new MhlHistoryException($"the card no longer matches its own ASC MHL history in {where} (from an earlier offload): "
-                + string.Join("; ", new[]
+                + string.Join(", and ", new[]
                 {
-                    changed.Count > 0 ? $"{changed.Count:N0} file{(changed.Count == 1 ? "" : "s")} changed since then (e.g. {changed[0]})" : null,
-                    missing.Count > 0 ? $"{missing.Count:N0} missing from the card (e.g. {missing[0]})" : null,
+                    changed.Count > 0 ? $"{changed.Count:N0} file{(changed.Count == 1 ? "" : "s")} changed after that offload (for example {changed[0]})" : null,
+                    missing.Count > 0 ? $"{missing.Count:N0} file{(missing.Count == 1 ? " is" : "s are")} missing from the card (for example {missing[0]})" : null,
                 }.OfType<string>())
-                + ". No ASC MHL manifest was added; check those files", cardChanged: true) { History = history };
+                + ". The backup did not add an ASC MHL manifest. Check those files.", cardChanged: true) { History = history };
         return new History(chain, xxh64, ignore);
     }
 

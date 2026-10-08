@@ -56,8 +56,8 @@ public sealed class MainViewModel : ObservableObject
     private string? _sortCard;
     /// <summary>What the result card said after the last job (kept when "Verify again" adds its own title).</summary>
     private ResultView? _outcome;
-    private string _status = "Choose the folder with your card backup to begin.";
-    private string _runVerb = "Moving";
+    private string _status = "To start, choose the source folder: the folder with your card backup.";
+    private string _runVerb = "Move in progress";
     private CancellationTokenSource? _cts;
     private PauseGate? _pause;
     private Task? _activeRun;
@@ -132,7 +132,7 @@ public sealed class MainViewModel : ObservableObject
         SelectedModeTab = SortTab;
         if (!CanEditInputs) return;
         SetSource(folder, keepTarget: false);
-        Status = "The backup is the folder to sort. Choose what to move, then press “Check folder”.";
+        Status = "The backup is now the source folder. Choose what to move. Then click “Check folder”.";
     }
 
     // ---- Inputs ---------------------------------------------------------------------------------------------------
@@ -190,7 +190,7 @@ public sealed class MainViewModel : ObservableObject
     public string ModeWord => char.ToUpperInvariant(Planner.Word(Mode)[0]) + Planner.Word(Mode)[1..];
 
     public string ModeHint => MoveVideos
-        ? "Videos move, with the small files cameras and drones make next to them (previews, subtitles, info files) and sound recordings that don't belong to a photo. Photos and everything else stay."
+        ? "Videos move, together with the small files that cameras and drones make next to them (previews, subtitles, info files). Sound recordings that do not belong to a photo also move. Photos and everything else stay."
         : "Photos and raw files move, with their small companion files (edits, voice memos, Live Photo clips). Videos, sound recordings and everything else stay.";
 
     private bool TargetWasSuggested =>
@@ -301,7 +301,7 @@ public sealed class MainViewModel : ObservableObject
     public bool ListsGrow => !_afterRun;
     /// <summary>Shown instead of an empty "Still in the source" list.</summary>
     public string MoveListEmptyText => _afterRun && _check is { Left.Count: 0 }
-        ? (_check.NotChecked is null ? "Nothing that should move is left in the source. The Staying tab shows what stays and why." : "")
+        ? (_check.NotChecked is null ? "Nothing to move remains in the source folder. The “Files that stay” tab shows these files and why they stay." : "")
         : "";
     /// <summary>The filter box and "only files that need a look" apply to the file lists.</summary>
     public bool ShowListFilter => SelectedListTab is MoveListTab or StayListTab;
@@ -343,7 +343,7 @@ public sealed class MainViewModel : ObservableObject
     public string CardLine { get; private set; } = "";
     public bool HasCardLine => CardLine.Length > 0;
     public string MoveTabHeader { get; private set; } = "Files to move";
-    public string StayTabHeader { get; private set; } = "Staying";
+    public string StayTabHeader { get; private set; } = "Files that stay";
     public string? SuggestedSource { get; private set; }
     public bool HasSuggestedSource => SuggestedSource is not null;
 
@@ -443,7 +443,7 @@ public sealed class MainViewModel : ObservableObject
     /// </summary>
     public bool CanUndoLastJob => LastJob is { IsEnded: true, IsUndo: false, DoneCount: > 0 } j && (j.UndoneBy is null || j.UndoneBy.IsPartial);
 
-    public string OpenTargetText => LastJob?.IsUndo == true ? "Open the original folder" : "Open target folder";
+    public string OpenTargetText => LastJob?.IsUndo == true ? "Open the source folder" : "Open the target folder";
 
     private int _emptyFolderCount;
     public int EmptyFolderCount
@@ -452,7 +452,7 @@ public sealed class MainViewModel : ObservableObject
         private set { if (Set(ref _emptyFolderCount, value)) Raise(nameof(RemoveEmptyText)); }
     }
     public string RemoveEmptyText => $"Remove {RunOutcome.Count(EmptyFolderCount, "empty folder")}"
-        + (LastJob?.IsUndo == true ? " in the sorted folder" : " in the source");
+        + (LastJob?.IsUndo == true ? " in the target folder" : " in the source folder");
     private List<string> _emptyFolders = [];
 
     // ---- Unfinished job banner --------------------------------------------------------------------------------------
@@ -524,7 +524,7 @@ public sealed class MainViewModel : ObservableObject
             : Directory.Exists(_browseTargetStart) ? _browseTargetStart
             : Directory.Exists(SourcePath) ? Path.GetDirectoryName(SourcePath.TrimEnd('\\')) ?? SourcePath
             : null;
-        if (_dialogs.PickFolder($"Choose where the {Planner.Word(Mode)} should go", start) is { } folder) TargetPath = folder;
+        if (_dialogs.PickFolder($"Choose the target folder for the {Planner.Word(Mode)}", start) is { } folder) TargetPath = folder;
     }
 
     private async Task ScanAsync()
@@ -535,7 +535,7 @@ public sealed class MainViewModel : ObservableObject
         bool verify = VerifyChecksums;
         if (!Directory.Exists(source))
         {
-            Status = "The folder to sort does not exist.";
+            Status = "The source folder does not exist.";
             return;
         }
 
@@ -545,8 +545,8 @@ public sealed class MainViewModel : ObservableObject
         _cts = new CancellationTokenSource();
         CancellationToken ct = _cts.Token;
         State = UiState.Scanning;
-        Status = "Checking the folder...";
-        var progress = new Progress<ScanProgress>(p => Status = $"Checking the folder... {p.Files:N0} files in {p.Folders:N0} folders");
+        Status = "Folder check in progress...";
+        var progress = new Progress<ScanProgress>(p => Status = $"Folder check in progress: {p.Files:N0} files in {p.Folders:N0} folders");
         try
         {
             MovePlan plan = await Task.Run(() => Leftovers.WithEarlierSorts(Planner.Build(Scanner.Scan(source, progress, ct, target), target, mode, verify)));
@@ -555,7 +555,7 @@ public sealed class MainViewModel : ObservableObject
                 // A path typed just before pressing Scan reached the view model during the scan.
                 State = UiState.Idle;
                 SetupExpanded = true;
-                Status = "Something changed during the check - check the folder again.";
+                Status = "Something changed during the check. Check the folder again.";
                 return;
             }
             ShowPlan(plan);
@@ -567,15 +567,15 @@ public sealed class MainViewModel : ObservableObject
             }
             State = UiState.Previewed;
             Status = ResumableJob is not null
-                ? "An unfinished job exists (see above). Resume it, or end it, before starting a new one."
-                : plan.CanRun ? $"Review the preview{WarningsToRead()}, then press “{ConfirmText}”. Nothing has been changed yet."
-                : plan.HasErrors ? "The move cannot start - see the messages above." : $"Nothing to move: no {Planner.Word(mode)} that can move were found.";
+                ? "There is an unfinished job (above). Resume it, or end it, before you start a new job."
+                : plan.CanRun ? $"Review the preview{WarningsToRead()}. Then click “{ConfirmText}”. The app did not change anything yet."
+                : plan.HasErrors ? "The move cannot start. See the messages above." : $"Nothing to move: the app found no {Planner.Word(mode)} that can move.";
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
             State = UiState.Idle;
             SetupExpanded = true;
-            Status = e is OperationCanceledException ? "Check cancelled." : "Could not check the folder: " + e.Message;
+            Status = e is OperationCanceledException ? "The check stopped." : "The app could not check the folder: " + e.Message;
         }
     }
 
@@ -592,7 +592,7 @@ public sealed class MainViewModel : ObservableObject
     private void ChangeSetup()
     {
         SetupExpanded = true;
-        if (ShowConfirm) Status = "Change what you need, then press “Check folder” to see the new preview.";
+        if (ShowConfirm) Status = "Change what you need. Then click “Check folder” to see the new preview.";
     }
 
     private async Task UseSuggestedSourceAsync()
@@ -613,21 +613,21 @@ public sealed class MainViewModel : ObservableObject
                     SelectedModeTab = BackupTab;
                     Status = Backup.UseCard(plan.SourceRoot)
                         ? JobTexts.MemoryCardNotSorted
-                        : "Nothing was moved. A backup is running on the Backup tab: back this card up when it has finished, then sort the backup.";
+                        : "Nothing moved. A backup is in progress on the Backup tab. When it is finished, back up this card. Then sort the backup.";
                     return;
                 case CardAnswer.Cancel:
-                    Status = "Nothing was moved.";
+                    Status = "Nothing moved.";
                     return;
             }
         }
         if (Backup.IsBusy)
         {
-            _dialogs.Inform(WpfDialogs.Caption, "A backup is running in this window. Let it finish (or stop it) before starting a sort.");
+            _dialogs.Inform(WpfDialogs.Caption, "A backup is in progress in this window. Before you start a sort, wait until the backup is finished, or stop it.");
             return;
         }
         ClearResult();
         _sortCard = plan.MemoryCard; // the result reminds that the card still holds the rest (and maybe everything)
-        await RunJobAsync(options => JobRunner.Start(plan, options), (runner, ct) => runner.Run(ct), "Moving");
+        await RunJobAsync(options => JobRunner.Start(plan, options), (runner, ct) => runner.Run(ct), "Move in progress");
     }
 
     private async Task RunExistingJobAsync(bool close)
@@ -635,7 +635,7 @@ public sealed class MainViewModel : ObservableObject
         if (ResumableJob is not { } job) return;
         if (Backup.IsBusy)
         {
-            _dialogs.Inform(WpfDialogs.Caption, "A backup is running in this window. Let it finish (or stop it) first.");
+            _dialogs.Inform(WpfDialogs.Caption, "A backup is in progress in this window. First, wait until it is finished, or stop it.");
             return;
         }
         if (!job.IsUndo)
@@ -648,7 +648,7 @@ public sealed class MainViewModel : ObservableObject
         }
         ClearPreview();
         ClearResult();
-        string verb = close ? "Ending the job" : job.IsUndo ? "Moving the files back" : "Resuming";
+        string verb = close ? "The app ends the job" : job.IsUndo ? "Undo in progress" : "The sort continues";
         await RunJobAsync(options => JobRunner.Open(job.JournalPath, options), (runner, ct) => close ? runner.Close(ct) : runner.Run(ct), verb);
     }
 
@@ -689,8 +689,8 @@ public sealed class MainViewModel : ObservableObject
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JournalException or InvalidOperationException)
         {
             SetResult(ResultTone.Attention, "The job could not continue", "", [],
-                e.Message + (journal is null ? "" : "\n\nNothing is lost: every completed step is in the log, and the job can be resumed."), null);
-            Status = "The job could not continue - see the message above.";
+                e.Message + (journal is null ? "" : "\n\nNothing is lost: the job log records every completed step, and you can resume the job."), null);
+            Status = "The job could not continue. See the message above.";
         }
         finally
         {
@@ -727,7 +727,7 @@ public sealed class MainViewModel : ObservableObject
         _cts = new CancellationTokenSource();
         CancellationToken ct = _cts.Token;
         State = UiState.Checking;
-        var progress = new Progress<ScanProgress>(p => Status = $"Checking what is left in the source... {p.Files:N0} files");
+        var progress = new Progress<ScanProgress>(p => Status = $"The app checks what remains in the source folder: {p.Files:N0} files");
         // The source again, with what this job and earlier sorts of the folder left behind (the plan "Move the remaining"
         // runs). What it finds also goes into the job's log, so its summary says the same as this result.
         (SourceCheck check, MovePlan? plan) = await Task.Run(() =>
@@ -769,7 +769,7 @@ public sealed class MainViewModel : ObservableObject
         ProgressLeft = $"{p.ItemsFinished:N0} of {p.ItemsTotal:N0} files{data}"
             + (p.Skipped > 0 ? $"  ·  {p.Skipped:N0} skipped" : "") + (p.Failed > 0 ? $"  ·  {p.Failed:N0} failed" : "");
         ProgressRight = IsPaused ? "Paused"
-            : p.BytesPerSecond > 0 ? $"{Format.Rate(p.BytesPerSecond)}" + (p.Remaining is { } r ? $"  ·  about {Format.Duration(r)} left" : "")
+            : p.BytesPerSecond > 0 ? $"{Format.Rate(p.BytesPerSecond)}" + (p.Remaining is { } r ? $"  ·  approximately {Format.Duration(r)} left" : "")
             : "";
         ProgressFile = p.CurrentFile is null ? p.Phase : $"{p.Phase}:  {p.CurrentFile}";
     }
@@ -781,7 +781,7 @@ public sealed class MainViewModel : ObservableObject
         else _pause.Pause();
         IsPaused = _pause.IsPaused;
         ProgressRight = IsPaused ? "Paused" : "";
-        Status = IsPaused ? "Paused. Do not unplug the drives while paused - press Stop first." : _runVerb + "...";
+        Status = IsPaused ? "Paused. Do not disconnect the drives while the job is paused. To disconnect them, click Stop first." : _runVerb + "...";
     }
 
     private void Stop()
@@ -789,7 +789,7 @@ public sealed class MainViewModel : ObservableObject
         _cts?.Cancel();
         _pause?.Resume();
         IsPaused = false;
-        Status = State == UiState.Checking ? "Stopping the check..." : "Stopping safely - the file in progress is finished or rolled back...";
+        Status = State == UiState.Checking ? "The check stops..." : "The job stops safely: the app finishes the file in progress or rolls it back...";
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -798,9 +798,9 @@ public sealed class MainViewModel : ObservableObject
         if (LastJob is not { } job) return;
         _cts = new CancellationTokenSource();
         CancellationToken ct = _cts.Token;
-        _runVerb = "Verifying";
+        _runVerb = "The app checks the moved files again";
         State = UiState.Verifying;
-        Status = "Checking the moved files again...";
+        Status = "The app checks the moved files again...";
         Progress = 0;
         ProgressLeft = ProgressRight = ProgressFile = "";
         try
@@ -811,13 +811,13 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            Status = "Checking again was stopped.";
+            Status = "The check stopped.";
         }
         catch (JournalException e)
         {
-            SetResult(ResultTone.Attention, "Could not check again", _outcome?.LeftLine ?? "", _outcome?.Reasons ?? [],
-                e.InUse ? "This job is in use in another window (or a command-line run). Close it there, then check again." : e.Message, _outcome?.Alarm);
-            Status = "Checking again did not run.";
+            SetResult(ResultTone.Attention, "The app could not check again", _outcome?.LeftLine ?? "", _outcome?.Reasons ?? [],
+                e.InUse ? "This job is in use in another window or in a command-line run. Close the job there. Then check again." : e.Message, _outcome?.Alarm);
+            Status = "The app did not check again.";
         }
         finally
         {
@@ -829,20 +829,20 @@ public sealed class MainViewModel : ObservableObject
     {
         if (LastJob is not { } job || _emptyFolders.Count == 0) return;
         string sample = string.Join("\n", _emptyFolders.Take(10).Select(f => "  " + f)) + (_emptyFolders.Count > 10 ? "\n  ..." : "");
-        string where = job.IsUndo ? "in the sorted folder held only files that went back" : "in the source held only moved files";
+        string where = job.IsUndo ? "in the target folder held only files that returned to the source folder" : "in the source folder held only moved files";
         if (!_dialogs.Confirm("Remove empty folders",
-                $"These folders {where} and are now completely empty:\n\n{sample}\n\nRemove them? Folders that are not empty are never touched.")) return;
+                $"These folders {where} and are now completely empty:\n\n{sample}\n\nRemove them? The app never removes or changes a folder that is not empty.")) return;
         List<string> folders = _emptyFolders;
         State = UiState.Removing;
-        Status = "Removing empty folders...";
+        Status = "The app removes the empty folders...";
         try
         {
             int removed = await Task.Run(() => EmptyFolders.Remove(job.JournalPath, folders));
-            Status = $"Removed {RunOutcome.Count(removed, "empty folder")}. Each removal is recorded in the log.";
+            Status = $"Removed: {RunOutcome.Count(removed, "empty folder")}. The job log records each removal.";
         }
         catch (JournalException e)
         {
-            Status = e.InUse ? "This job is in use in another window - no folders were removed." : e.Message;
+            Status = e.InUse ? "This job is in use in another window. The app did not remove any folders." : e.Message;
         }
         finally
         {
@@ -874,7 +874,7 @@ public sealed class MainViewModel : ObservableObject
             UiState before = State;
             string statusBefore = Status;
             State = UiState.Scanning;
-            Status = "Checking what can go back...";
+            Status = "The app checks which files can return...";
             preview = null;
             string? error = null;
             try
@@ -893,7 +893,7 @@ public sealed class MainViewModel : ObservableObject
             }
             if (preview is null)
             {
-                _dialogs.Inform("Undo a sort", "The sort's log can't be read: " + error, isError: true);
+                _dialogs.Inform("Undo a sort", "The app could not read the job log of the sort: " + error, isError: true);
                 return;
             }
             if (JobTexts.UndoNext(preview) != UndoStep.ChooseFolder) break;
@@ -915,7 +915,7 @@ public sealed class MainViewModel : ObservableObject
         ClearPreview();
         ClearResult();
         string? chosen = putBackTo;
-        await RunJobAsync(options => UndoFactory.Start(journal, choice.StartedFrom, chosen, options), (runner, ct) => runner.Run(ct), "Moving the files back");
+        await RunJobAsync(options => UndoFactory.Start(journal, choice.StartedFrom, chosen, options), (runner, ct) => runner.Run(ct), "Undo in progress");
     }
 
     // ---- Banner -----------------------------------------------------------------------------------------------------
@@ -968,12 +968,12 @@ public sealed class MainViewModel : ObservableObject
             if (!Backup.HasBanner) SelectedModeTab = SortTab;
         }
         if (startup && HasBanner && State == UiState.Idle)
-            Status = ResumableJob is not null ? "An unfinished job was found (above). Resume it, or end it without moving the rest."
+            Status = ResumableJob is not null ? "The app found an unfinished job (above). Resume it, or end it. If you end it, the remaining files stay where they are."
                 : OfflineWhy switch
                 {
-                    MissingLog.FolderMoved => "The folder of an unfinished job was renamed or moved (above).",
-                    MissingLog.Either => "The log of an unfinished job can't be found (above).",
-                    _ => "An unfinished job is waiting for its drive (above).",
+                    MissingLog.FolderMoved => "The folder of an unfinished job has a new name or location (above).",
+                    MissingLog.Either => "The app cannot find the log of an unfinished job (above).",
+                    _ => "An unfinished job (above) needs its drive.",
                 };
     }
 
@@ -1014,8 +1014,8 @@ public sealed class MainViewModel : ObservableObject
         if (OfflineJob is not { } job) return;
         string kind = job.Kind == JobKind.Undo ? "undo" : "sort";
         if (!_dialogs.Confirm("Forget this job",
-                $"Stop reminding you about the unfinished {kind} on {job.DriveName}?\n\n"
-                + "Nothing is deleted: its log stays on the drive. When you scan that folder again (or open its log), the job is found and can be resumed.")) return;
+                $"Forget the unfinished {kind} on {job.DriveName}? The app will not remind you about it again.\n\n"
+                + "The app deletes nothing: the job log stays on the drive. When you check that folder again (or open its log), the app finds the job, and you can resume it.")) return;
         RecentJobs.Forget(job.JournalPath);
         if (job.JobId.Length > 0) RecentJobs.Forget(job.JobId);
         _ = RefreshBannerAsync();
@@ -1055,20 +1055,20 @@ public sealed class MainViewModel : ObservableObject
         _afterRun = false;
         _check = null;
         var identical = new HashSet<SourceFile>(plan.IdenticalConflicts);
-        var moveRows = plan.ToMove.Select(f => Row(f, identical.Contains(f) ? "Already in the target - will be skipped" : FileNotes.Describe(f.Note),
+        var moveRows = plan.ToMove.Select(f => Row(f, identical.Contains(f) ? "Already in the target folder: the app skips it" : FileNotes.Describe(f.Note),
             PlanFacts.NeedsLook(f, identical))).ToList();
         FillLists(plan, moveRows, afterRun: false);
 
         (int files, _, long bytes) = PlanFacts.Transfer(plan);
         MoveCount = RunOutcome.Files(files);
         MoveSize = Format.Bytes(bytes) + $"  ·  {Planner.Word(plan.Mode)} and their companion files"
-            + (identical.Count > 0 ? $" (+{identical.Count:N0} already in the target)" : "");
+            + (identical.Count > 0 ? $" (+{identical.Count:N0} already in the target folder)" : "");
         StayCount = RunOutcome.Files(plan.Staying.Count);
-        StaySize = Format.Bytes(plan.BytesStaying) + "  ·  left exactly where they are";
-        (MethodTitle, MethodDetail) = plan.HasErrors ? ("Cannot start", "See the messages below")
+        StaySize = Format.Bytes(plan.BytesStaying) + "  ·  they stay exactly where they are";
+        (MethodTitle, MethodDetail) = plan.HasErrors ? ("Cannot start", "See the messages below.")
             : plan.Method == TransferMethod.Rename
-                ? ("Instant move", $"Same drive ({plan.SourceVolume?.DisplayName}): the files are moved in place, their names stay the same")
-                : ("Copy, check, then move", $"{plan.SourceVolume?.DisplayName} → {plan.TargetVolume?.DisplayName}: each file is copied and checked before the original is removed");
+                ? ("Instant move", $"Same drive ({plan.SourceVolume?.DisplayName}): the files move in place and keep their names")
+                : ("Copy, check, then move", $"{plan.SourceVolume?.DisplayName} → {plan.TargetVolume?.DisplayName}: the app copies and checks each file before it removes the original");
         Attention attention = PlanFacts.Attention(plan);
         AttentionCount = attention.CountText;
         AttentionDetail = attention.Detail;
@@ -1093,8 +1093,8 @@ public sealed class MainViewModel : ObservableObject
         var left = check.Left.Select(f => new FileRow(Path.GetDirectoryName(f.Rel) ?? "", Path.GetFileName(f.Rel), PlanFacts.Kind(f.IsPrimary, mode),
             f.Detail, f.Size, Format.Bytes(f.Size), f.Status, true)).ToList();
         FillLists(plan, left, afterRun: true);
-        MoveTabHeader = $"Still in {(undo ? "the sorted folder" : "the source")} ({left.Count:N0})";
-        ListsHeading = undo ? "After the undo - still in the sorted folder" : "After the sort - still in the source";
+        MoveTabHeader = $"Still in the {(undo ? "target" : "source")} folder ({left.Count:N0})";
+        ListsHeading = undo ? "After the undo: still in the target folder" : "After the sort: still in the source folder";
         if (plan is not null)
         {
             ConfirmText = PlanFacts.ConfirmText(plan, remaining: true);
@@ -1135,7 +1135,7 @@ public sealed class MainViewModel : ObservableObject
         StayView = CollectionViewSource.GetDefaultView(stayRows);
         StayView.Filter = o => Matches((FileRow)o, ListFilter);
         FolderRows = plan.ByFolder.Select(s => new FolderRow(s.Folder, s.MovingFiles, s.MovingBytes, Format.Bytes(s.MovingBytes), s.StayingFiles,
-            s.Split ? "Split - files next to them stay" : "")).ToList();
+            s.Split ? "Split: the files next to them stay" : "")).ToList();
         TypeRows = plan.ByType.Select(t => new TypeRow(t.Extension, t.Classification, t.Moves ? "Moves" : "Stays", t.Files, t.Bytes, Format.Bytes(t.Bytes))).ToList();
         // How files move is shown in its own tile; the list keeps what needs reading. After a job only warnings matter.
         string method = plan.Method == TransferMethod.Rename ? "Same drive (" : "Different drives (";
@@ -1148,7 +1148,7 @@ public sealed class MainViewModel : ObservableObject
                 MessageLevel.Warning => IconWarning,
                 _ => IconInfo,
             }, m.Text, m.Level) { IsSplit = Leftovers.IsSplitMessage(m) }).ToList();
-        StayTabHeader = $"Staying ({plan.Staying.Count:N0})";
+        StayTabHeader = $"Files that stay ({plan.Staying.Count:N0})";
     }
 
     private static FileRow Row(SourceFile f, string note, bool attention) =>
@@ -1185,7 +1185,7 @@ public sealed class MainViewModel : ObservableObject
         if (_plan is null && !_afterRun || State is UiState.Running or UiState.Checking or UiState.Verifying or UiState.Removing) return;
         ClearPreview();
         if (State == UiState.Previewed) State = UiState.Idle;
-        if (!keepStatus) Status = "Something changed - check the folder again.";
+        if (!keepStatus) Status = "Something changed. Check the folder again.";
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -1277,12 +1277,12 @@ public sealed class MainViewModel : ObservableObject
         if (Backup.IsRunning)
         {
             if (!_dialogs.Confirm(WpfDialogs.Caption,
-                    "A backup is running. Stop it safely and close?\n\nThe copy in progress is finished or removed, and the backup can be resumed later.")) return false;
+                    "A backup is in progress. Stop it safely and close the app?\n\nThe app finishes or removes the copy in progress. You can resume the backup later.")) return false;
             await Backup.StopForCloseAsync();
             return true;
         }
         if (!_dialogs.Confirm(WpfDialogs.Caption,
-                "A job is running. Stop it safely and close?\n\nThe file in progress is finished or rolled back, and the job can be resumed later.")) return false;
+                "A job is in progress. Stop it safely and close the app?\n\nThe app finishes the file in progress or rolls it back. You can resume the job later.")) return false;
         Stop();
         Task? run = _activeRun;
         if (run is not null) await run.ContinueWith(_ => { });

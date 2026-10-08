@@ -91,8 +91,8 @@ public class PlannerTests
             target: @"D:\offload-planner-test-does-not-exist\Video");
         Assert.Empty(Errors(plan));
         Assert.True(plan.CanRun);
-        Assert.Contains("This looks like a memory card or camera drive (F: SONY_A). Sort moves files around on it. "
-            + "Back the card up to another drive first (the Backup tab) and sort the backup.", Warnings(plan));
+        Assert.Contains("This looks like a memory card or camera drive (F: SONY_A). A sort moves files to different folders on it. "
+            + "First, use the Backup tab to back up the card to a different drive. Then sort the backup.", Warnings(plan));
         Assert.Equal("F: SONY_A", plan.MemoryCard);
     }
 
@@ -144,7 +144,7 @@ public class PlannerTests
         // A scan that did include the target folder is refused rather than sorting its files a second time.
         MovePlan stale = Planner.Build(Scanner.Scan(t.Source), breakout, MoveMode.Videos, verifyChecksums: true);
         Assert.False(stale.CanRun);
-        Assert.Contains("The target folder is inside the source folder, but it was scanned as part of the source. Scan again.", Errors(stale));
+        Assert.Contains("The target folder is inside the source folder, but the scan included it in the source folder. Scan again.", Errors(stale));
 
         // The other way round stays refused.
         Assert.Equal("The source folder cannot be inside the target folder.", Planner.ValidateTarget(breakout, t.Source, out _));
@@ -173,7 +173,7 @@ public class PlannerTests
         Assert.Contains(again.SkippedFolders, s => s.RelativePath.Equals("Video", StringComparison.OrdinalIgnoreCase) && s.Reason == "the target folder");
         MovePlan rescan = Planner.Build(again, target, MoveMode.Videos, verifyChecksums: true);
         Assert.Empty(rescan.ToMove);
-        Assert.DoesNotContain(Errors(rescan), e => e.Contains("scanned as part of the source"));
+        Assert.DoesNotContain(Errors(rescan), e => e.Contains("the scan included it in the source folder"));
 
         // The source itself, or a folder around it, under another name is refused like the plain path.
         Assert.Equal("The target folder must be different from the source folder.", Planner.ValidateTarget(t.Source, alias, out _));
@@ -261,7 +261,7 @@ public class PlannerTests
         var volume = new VolumeInfo(Path.GetPathRoot(source)!, 1, "NTFS", GB, GB);
         PlanMessage? message = SourceGuards.CheckBroad(source, volume, Folders, MoveMode.Videos);
         Assert.Equal(expected, message?.Level);
-        if (expected == MessageLevel.Warning) Assert.Contains("choose the folder with the card backups", message!.Text);
+        if (expected == MessageLevel.Warning) Assert.Contains("Choose the folder with the card backups", message!.Text);
     }
 
     [Fact]
@@ -273,7 +273,7 @@ public class PlannerTests
             target: @"D:\offload-planner-test-does-not-exist\Out");
         Assert.False(plan.CanRun);
         Assert.Equal(card, plan.SuggestedSource);
-        Assert.Contains($@"You picked a folder inside a video card structure (...\M4ROOT). Choose the folder that holds the whole card instead: {card}.", Errors(plan));
+        Assert.Contains($@"You selected a folder inside a video card structure (...\M4ROOT). Choose the folder that holds the whole card instead: {card}.", Errors(plan));
 
         // P2: the source is the CONTENTS folder itself; the card is the folder above it.
         var p2 = CardStructures.FindEnclosing(@"X:\Dumps\CardA\CONTENTS",
@@ -305,7 +305,7 @@ public class PlannerTests
                 canDelete: _ => throw new InvalidOperationException("a refused source is never probed")),
             target: @"D:\offload-planner-test-does-not-exist\Video");
         Assert.Contains(SourceGuards.MemoryCardWarning("F: SONY_A"), Warnings(plan));
-        Assert.Equal(@"You picked a folder inside a video card structure (...\M4ROOT). Choose the folder that holds the whole card instead: F:\.",
+        Assert.Equal(@"You selected a folder inside a video card structure (...\M4ROOT). Choose the folder that holds the whole card instead: F:\.",
             Assert.Single(Errors(plan)));
         Assert.Equal(@"F:\", plan.SuggestedSource);
     }
@@ -316,7 +316,7 @@ public class PlannerTests
         // A card structure straight in the root of the Windows drive: the drive itself is no better.
         MovePlan plan = Plan(Scan(@"C:\M4ROOT", (@"CLIP\C0001.MP4", 1000)), Env(), target: @"D:\offload-planner-test-does-not-exist\Video");
         Assert.Null(plan.SuggestedSource);
-        Assert.Contains(@"You picked a folder inside a video card structure (...\M4ROOT). Choose the folder that holds the whole card instead (copy the card into a folder of its own first).",
+        Assert.Contains(@"You selected a folder inside a video card structure (...\M4ROOT). Copy the card into a folder of its own. Then choose that folder as the source folder.",
             Errors(plan));
 
         // On a fixed exFAT drive with a camera DCIM at its root, the drive root is only flagged as card-like, not
@@ -473,7 +473,7 @@ public class PlannerTests
         SourceFile clash = Assert.Single(plan.DifferentConflicts);
         Assert.Equal(@"d\DJI_0001.MP4", clash.RelativePath);
         Assert.Equal(FileNote.DifferentInTarget, clash.Note);
-        Assert.Equal("a DIFFERENT file with the same name is already in the target - stays", clash.Reason);
+        Assert.Equal("stays: a DIFFERENT file with the same name is already in the target folder", clash.Reason);
         Assert.Equal(3, plan.HeldBack.Count);
         SourceFile proxy = plan.HeldBack.Single(f => f.Name == "DJI_0001.LRF");
         Assert.Equal(FileNote.HeldWithGroup, proxy.Note);
@@ -484,7 +484,7 @@ public class PlannerTests
         Assert.Equal(2, plan.FilesToTransfer);
         Assert.Equal(plan.FilesToTransfer, plan.ToMove.Count - plan.Conflicts.Count);
         Assert.True(plan.CanRun);
-        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Info && m.Text == "1 file is already in the target (same name, size and date) and will be skipped.");
+        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Info && m.Text == "1 file is already in the target folder (same name, size and date). The sort will skip it.");
         Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("1 file(s) have the same name as DIFFERENT files")
             && m.Text.Contains("Sort each card into its own folder"));
 
@@ -552,12 +552,12 @@ public class PlannerTests
     {
         MovePlan plan = Plan(ScanPaths(@"a\clip.MOV", @"a\notes.bin", @"a\photo.JPG", @"a\Thumbs.db", @"a\._clip.MOV", @"p\x.JPG", @"q\y.MOV",
             @"CardA\CONTENTS\CLIP\0001AB.XML", @"CardA\CONTENTS\CLIP\0001AB.MXF"), Env());
-        PlanMessage split = Assert.Single(plan.Messages, m => m.Text.Contains("will be split"));
+        PlanMessage split = Assert.Single(plan.Messages, m => m.Text.Contains("The sort will split"));
         Assert.Equal(MessageLevel.Warning, split.Level);
         Assert.Contains(@"a: .bin x1", split.Text);
         Assert.DoesNotContain(".jpg", split.Text);
         Assert.DoesNotContain(".db", split.Text);
-        Assert.StartsWith("1 folder(s) will be split - files next to your videos stay behind", split.Text);
+        Assert.StartsWith("The sort will split 1 folder(s): files next to your videos stay in the source folder", split.Text);
 
         FolderSummary a = plan.ByFolder.Single(f => f.Folder == "a");
         Assert.True(a.Split);
@@ -582,7 +582,7 @@ public class PlannerTests
         Assert.Contains("and 2 more types", unknown);
         string large = Assert.Single(plan.Messages, m => m.Text.Contains("of 100 MB or more")).Text;
         Assert.Contains($"DSC_1001.NEWRAW ({Format.Bytes(4 * GB)})", large);
-        Assert.Contains("check them before deleting or formatting anything", large);
+        Assert.Contains("Check them before you delete or format anything", large);
     }
 
     [Fact]
@@ -599,16 +599,16 @@ public class PlannerTests
         // X7 frames carry the CinemaDNG movie tags (there is no sound file with a drone camera).
         Func<SourceFile, bool> movieFrames = f => f.Directory == "X7_0012";
         MovePlan videos = Plan(Scan(Source, movieFrames, entries.ToArray()), Env());
-        Assert.Contains(videos.Messages, m => m.Text == $"2 audio recording(s) ({Format.Bytes(20 * MB)}) with no matching photo go with the videos: Audio\\ZOOM_F6.");
+        Assert.Contains(videos.Messages, m => m.Text == $"2 audio recording(s) ({Format.Bytes(20 * MB)}) have no photo of the same name, so they go with the videos: Audio\\ZOOM_F6.");
         Assert.Contains(videos.Messages, m => m.Text == $"1 iPhone Live Photo clip(s) ({Format.Bytes(3 * MB)}) belong to their photos and stay with them: Phone\\IMG_1.MOV.");
-        Assert.Contains(videos.Messages, m => m.Text.Contains(@"too large to be Live Photo clips") && m.Text.Contains(@"Phone\IMG_2.MOV"));
+        Assert.Contains(videos.Messages, m => m.Text.Contains(@"too large for Live Photo clips") && m.Text.Contains(@"Phone\IMG_2.MOV"));
         Assert.Contains(videos.Messages, m => m.Text.StartsWith("Video card structures move as a whole: Sony\\PRIVATE\\M4ROOT (Sony XAVC card structure, 1 file)"));
-        Assert.Contains(videos.Messages, m => m.Text.Contains("CinemaDNG clip X7_0012 (10 frames)") && m.Text.EndsWith("they go with the videos."));
-        Assert.Contains(videos.Messages, m => m.Text.StartsWith("1 mapping/LiDAR mission(s) are kept whole (they stay with the photos): Survey"));
-        Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("This folder has checksum manifests from your backup tool (ASC MHL)."));
+        Assert.Contains(videos.Messages, m => m.Text.Contains("CinemaDNG clip X7_0012 (10 frames)") && m.Text.EndsWith("They go with the videos."));
+        Assert.Contains(videos.Messages, m => m.Text.StartsWith("1 mapping/LiDAR mission(s) stay whole (they stay with the photos): Survey"));
+        Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("The source folder has checksum manifests from your backup tool (ASC MHL)."));
 
         MovePlan photos = Plan(Scan(Source, movieFrames, entries.ToArray()), Env(), MoveMode.Photos);
-        Assert.Contains(photos.Messages, m => m.Text.Contains("with no matching photo count as video sound and stay"));
+        Assert.Contains(photos.Messages, m => m.Text.Contains("have no photo of the same name, so they stay with the videos as video sound"));
         Assert.Equal(new[] { @"Phone\IMG_1.HEIC", @"Phone\IMG_1.MOV", @"Phone\IMG_2.HEIC", @"Survey\DJI_0001.JPG", @"Survey\DJI_Timestamp.MRK" },
             photos.ToMove.Select(f => f.RelativePath));
     }
@@ -625,9 +625,9 @@ public class PlannerTests
         MovePlan videos = Plan(scan, Env());
         Assert.Equal(new[] { @"2026-09-20\IMG_0413.MOV" }, videos.ToMove.Select(f => f.RelativePath));
         Assert.DoesNotContain(videos.Messages, m => m.Text.Contains("nothing to move"));
-        Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning && m.Text == "1 video(s) have the same name as a photo next to them "
-            + $"but are not Live Photo clips (no Apple Live Photo tag), so they are treated as videos and move: 2026-09-20\\IMG_0413.MOV ({Format.Bytes(14 * MB)}). "
-            + "Another camera probably used the same numbers - check that they are videos.");
+        Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning && m.Text == "1 video(s) have the same name as a photo next to them, "
+            + $"but they are not Live Photo clips (no Apple Live Photo tag). IVAR Offload treats them as videos, so they move: 2026-09-20\\IMG_0413.MOV ({Format.Bytes(14 * MB)}). "
+            + "Probably another camera used the same file numbers. Check that they are videos.");
         Assert.Contains(videos.Messages, m => m.Text.StartsWith("1 iPhone Live Photo clip(s)") && m.Text.EndsWith(@"stay with them: Phone\IMG_0900.MOV."));
         Assert.True(videos.ToMove.Single().NeedsAttention);
     }
@@ -646,9 +646,10 @@ public class PlannerTests
             videos.MovingSideStaying.Select(f => f.RelativePath).Order(StringComparer.Ordinal));
         Assert.All(videos.MovingSideStaying, f => Assert.Contains(f, videos.Staying));
         Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("3 online-only cloud file(s) are not downloaded and stay in place")
-            && m.Text.EndsWith(" 1 video of them would move: make the folder available offline (right-click > Always keep on this device), wait for the download, then check again."));
-        Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("1 editing/processing project folder(s) found")
-            && m.Text.EndsWith(" 1 video in them stays in the source."));
+            && m.Text.EndsWith(" When these files are on this device, 1 video of them will move. To sort them, make the folder available offline "
+                + "(right-click > Always keep on this device). When the download is complete, check again."));
+        Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("1 editing/processing project folder(s) are in the source folder")
+            && m.Text.EndsWith(" 1 video in them stays in the source folder."));
 
         MovePlan photos = Plan(scan, Env(), MoveMode.Photos);
         Assert.Equal(new[] { @"Card1\DSC_1.JPG", @"Edits\Promo\logo.png" }, photos.MovingSideStaying.Select(f => f.RelativePath).Order(StringComparer.Ordinal));
@@ -659,20 +660,21 @@ public class PlannerTests
         MovePlan phoneVideos = Plan(phone, Env());
         Assert.Equal(new[] { @"Card1\C0003.MP4" }, phoneVideos.MovingSideStaying.Select(f => f.RelativePath));
         Assert.Contains(phoneVideos.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("3 online-only cloud file(s) are not downloaded")
-            && m.Text.EndsWith(" 1 video of them would move; 1 short clip(s) named like a photo next to them may be Live Photo clips or videos, "
-                + "which can only be told once they are downloaded: make the folder available offline (right-click > Always keep on this device), wait for the download, then check again."));
+            && m.Text.EndsWith(" When these files are on this device, 1 video of them will move. 1 short clip(s) have the same name as a photo next to them. "
+                + "IVAR Offload can identify them as Live Photo clips or videos only after you download them. To sort them, make the folder available offline "
+                + "(right-click > Always keep on this device). When the download is complete, check again."));
         MovePlan phonePhotos = Plan(phone, Env(), MoveMode.Photos);
         Assert.Equal(new[] { @"Phone\IMG_0501.HEIC" }, phonePhotos.MovingSideStaying.Select(f => f.RelativePath));
-        Assert.Contains(phonePhotos.Messages, m => m.Text.Contains(" 1 photo of them would move; 1 short clip(s) named like a photo"));
+        Assert.Contains(phonePhotos.Messages, m => m.Text.Contains(" 1 photo of them will move. 1 short clip(s) have the same name as a photo"));
 
-        // Nothing movable: the preview says which media stays and why instead of "No videos found".
+        // Nothing movable: the preview says which media stays and why instead of "The source folder has no videos".
         MovePlan stuck = Plan(Scan(Source, null, (@"Card1\C0003.MP4", 10 * MB, FileAttributes.Offline), (@"Edits\Promo\Promo.prproj", 1, FileAttributes.Archive),
             (@"Edits\Promo\Footage\A.MP4", MB, FileAttributes.Archive), (@"Edits\Promo\Footage\B.MP4", MB, FileAttributes.Archive)), Env());
         Assert.False(stuck.CanRun);
-        Assert.DoesNotContain(stuck.Messages, m => m.Text.StartsWith("No videos found"));
-        Assert.Contains(stuck.Messages, m => m.Level == MessageLevel.Warning && m.Text == "No videos can be moved - nothing to move. "
-            + "Still in the source: 3 videos (2 inside an editing/processing project, 1 online-only (not downloaded)).");
-        Assert.Contains(Plan(ScanPaths(@"a\notes.txt"), Env()).Messages, m => m.Text == "No videos found in the source folder - nothing to move.");
+        Assert.DoesNotContain(stuck.Messages, m => m.Text.StartsWith("The source folder has no videos"));
+        Assert.Contains(stuck.Messages, m => m.Level == MessageLevel.Warning && m.Text == "None of the videos can move, so there is nothing to move. "
+            + "The source folder still holds 3 videos (2 inside an editing/processing project, 1 online-only (not downloaded)).");
+        Assert.Contains(Plan(ScanPaths(@"a\notes.txt"), Env()).Messages, m => m.Text == "The source folder has no videos, so there is nothing to move.");
     }
 
     /// <summary>An Atomos recorder writes its tag export (.fcpxml) next to its clips; the clips are still videos.</summary>
@@ -687,7 +689,7 @@ public class PlannerTests
         Assert.DoesNotContain(plan.Messages, m => m.Text.Contains("unrecognized"));
         SourceFile export = plan.Staying.Single();
         Assert.Equal("not a photo or video (.FCPXML) - stays", export.Reason);
-        Assert.Contains(plan.Messages, m => m.Text.StartsWith("1 folder(s) will be split") && m.Text.Contains(".fcpxml x1"));
+        Assert.Contains(plan.Messages, m => m.Text.StartsWith("The sort will split 1 folder(s)") && m.Text.Contains(".fcpxml x1"));
     }
 
     /// <summary>Frames are never split from their sound silently; missing frames are pointed out.</summary>
@@ -705,15 +707,16 @@ public class PlannerTests
         MovePlan videos = Plan(Scan(Source, tagged, entries.ToArray()), Env());
         Assert.Equal(21, videos.ToMove.Count); // C0002's 19 frames and sound, and C0005.wav
         Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning
-            && m.Text == @"1 CinemaDNG clip(s) have missing frames and are kept together as one clip anyway: BMPCC\C0002 (1 missing). Check the card or its backup for the missing frames.");
-        Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("1 sound file(s) are named after numbered frames that are not treated as a clip")
+            && m.Text == @"1 CinemaDNG clip(s) have missing frames, but each one still stays together as one clip: BMPCC\C0002 (1 missing). Check the card or its backup for the missing frames.");
+        Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning
+            && m.Text.StartsWith("1 sound file(s) have numbered frames with their name next to them, but IVAR Offload does not treat these frames as a clip")
             && m.Text.Contains(@"BMPCC\C0005\C0005.wav (8 files)"));
-        Assert.Contains(videos.Messages, m => m.Text.StartsWith("1 folder(s) will be split") && m.Text.Contains(@"BMPCC\C0005: .dng x8"));
+        Assert.Contains(videos.Messages, m => m.Text.StartsWith("The sort will split 1 folder(s)") && m.Text.Contains(@"BMPCC\C0005: .dng x8"));
         Assert.True(videos.ByFolder.Single(f => f.Folder == @"BMPCC\C0005").Split);
 
         MovePlan photos = Plan(Scan(Source, tagged, entries.ToArray()), Env(), MoveMode.Photos);
         Assert.Equal(8, photos.ToMove.Count);
-        Assert.Contains(photos.Messages, m => m.Text.StartsWith("1 folder(s) will be split") && m.Text.Contains(@"BMPCC\C0005: .wav x1"));
+        Assert.Contains(photos.Messages, m => m.Text.StartsWith("The sort will split 1 folder(s)") && m.Text.Contains(@"BMPCC\C0005: .wav x1"));
     }
 
     /// <summary>
@@ -736,7 +739,7 @@ public class PlannerTests
                      @"Stills\2026-09-21\A001_C003_0101AB_000123.dng", @"Mixed\DSC_0100.NEF", @"Mixed\DSC_0100.xmp" })
             Assert.Contains(photo, moving);
         Assert.DoesNotContain(moving, p => p.StartsWith(@"Mixed\C0007"));
-        Assert.Contains(photos.Messages, m => m.Text.Contains("folder(s) will be split") && m.Text.Contains(@"Stills\2026-09-21: .pdf x1"));
+        Assert.Contains(photos.Messages, m => m.Text.Contains("The sort will split") && m.Text.Contains(@"Stills\2026-09-21: .pdf x1"));
 
         MovePlan videos = Plan(Stills(), Env());
         Assert.Equal(new[] { @"Mixed\C0007.wav", @"Mixed\C0007_000000.dng", @"Mixed\C0007_000001.dng", @"Mixed\C0007_000002.dng" },
@@ -752,8 +755,8 @@ public class PlannerTests
             @"Roof\BASE\DRTK3_20240119.24O", @"Roof\BASE\DRTK3_20240119.24N", @"Roof\GCP\gcp_list.csv", @"Roof\DCIM\100MEDIA\DJI_0002.MP4");
         MovePlan photos = Plan(scan, Env(), MoveMode.Photos);
         Assert.Equal(3, photos.ToMove.Count);
-        Assert.Contains(photos.Messages, m => m.Level == MessageLevel.Warning && m.Text == @"Survey data outside the mapping mission folders stays in the source: "
-            + @"Roof\BASE (DRTK3_20240119.24N, DRTK3_20240119.24O), Roof\GCP (gcp_list.csv). Copy it next to the photos if you process PPK or use ground control points.");
+        Assert.Contains(photos.Messages, m => m.Level == MessageLevel.Warning && m.Text == @"Survey data outside the mapping mission folders stays in the source folder: "
+            + @"Roof\BASE (DRTK3_20240119.24N, DRTK3_20240119.24O), Roof\GCP (gcp_list.csv). If you process PPK or use ground control points, copy it next to the photos.");
         Assert.DoesNotContain(photos.Messages, m => m.Text.Contains("unrecognized"));
         Assert.DoesNotContain(Plan(scan, Env()).Messages, m => m.Text.StartsWith("Survey data"));
     }
@@ -768,7 +771,7 @@ public class PlannerTests
         MovePlan videos = t.Plan();
         Assert.Equal(new[] { @"240120-Mavic3Pro\DCIM\DJI_001\DJI_20240120120000_0005_D.MP4" }, videos.ToMove.Select(f => f.RelativePath));
         Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning
-            && m.Text.StartsWith(@"1 DJI hyperlapse folder(s) hold the source frames of a hyperlapse: 240120-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005 (12 frames). They are photos and stay together with the photos"));
+            && m.Text.StartsWith(@"1 DJI hyperlapse folder(s) hold the still frames of a hyperlapse: 240120-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005 (12 frames). They are photos and stay together with the photos"));
 
         // Photo mode: a name clash on one frame keeps the whole hyperlapse in the source, never half of it.
         string clash = Path.Join(t.Target, @"240120-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0007.JPG");
@@ -789,7 +792,7 @@ public class PlannerTests
         Assert.Equal(new[] { @"Nikon\DSC_0001.NEF", @"Nikon\DSC_0001.xmp", @"Nikon\NKSC_PARAM\DSC_0001.NEF.nksc" },
             photos.ToMove.Select(f => f.RelativePath).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(photos.Messages, m => m.Text.Contains("match both a photo and a video"));
-        Assert.DoesNotContain(photos.Messages, m => m.Text.Contains("will be split"));
+        Assert.DoesNotContain(photos.Messages, m => m.Text.Contains("The sort will split"));
     }
 
     [Fact]
@@ -810,18 +813,19 @@ public class PlannerTests
         string photos = Journal("c", Source, "Photos", "2025-09-27T10:00:00.000+02:00");
 
         MovePlan other = Plan(ScanPaths(@"a\clip.MOV"), Env(journals: _ => [smith, same]));
-        Assert.Contains(other.Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith(@"This target already holds files sorted from E:\Smith on 25 Sep"));
+        Assert.Contains(other.Messages, m => m.Level == MessageLevel.Warning
+            && m.Text.StartsWith(@"This target folder already holds files that an earlier sort moved from E:\Smith on 25 Sep"));
         Assert.Contains(other.Messages, m => m.Text.EndsWith("(videos)."));
 
         MovePlan continues = Plan(ScanPaths(@"a\clip.MOV"), Env(journals: _ => [same]));
-        Assert.Contains(continues.Messages, m => m.Level == MessageLevel.Info && m.Text.StartsWith("This continues an earlier sort of this folder"));
-        Assert.DoesNotContain(continues.Messages, m => m.Text.StartsWith("This target already holds"));
+        Assert.Contains(continues.Messages, m => m.Level == MessageLevel.Info && m.Text.StartsWith("This sort continues an earlier sort of this folder"));
+        Assert.DoesNotContain(continues.Messages, m => m.Text.StartsWith("This target folder already holds"));
 
         MovePlan otherMode = Plan(ScanPaths(@"a\clip.MOV"), Env(journals: _ => [same, photos]));
         Assert.Contains(otherMode.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("(photos)"));
 
         MovePlan several = Plan(ScanPaths(@"a\clip.MOV"), Env(journals: _ => [smith, same, photos]));
-        Assert.Contains(several.Messages, m => m.Text.EndsWith("on 27 Sep 2025 (photos), and from 1 other earlier sort."));
+        Assert.Contains(several.Messages, m => m.Text.EndsWith("on 27 Sep 2025 (photos), and files from 1 other earlier sort."));
 
         // Logs this version cannot read (a future Backup mode, a damaged header) never stop the preview.
         string backup = Journal("d", @"E:\Card", "Backup", "2025-09-28T10:00:00.000+02:00");
@@ -830,7 +834,7 @@ public class PlannerTests
         MovePlan unreadable = Plan(ScanPaths(@"a\clip.MOV"), Env(journals: _ => [backup, damaged]));
         Assert.True(unreadable.CanRun);
         Assert.DoesNotContain(unreadable.Messages, m => m.Text.Contains("earlier sort"));
-        Assert.Contains(Plan(ScanPaths(@"a\clip.MOV"), Env(journals: _ => [backup, smith])).Messages, m => m.Text.Contains(@"sorted from E:\Smith"));
+        Assert.Contains(Plan(ScanPaths(@"a\clip.MOV"), Env(journals: _ => [backup, smith])).Messages, m => m.Text.Contains(@"an earlier sort moved from E:\Smith"));
     }
 
     [Fact]
@@ -842,8 +846,8 @@ public class PlannerTests
             SourceRoot = scan.SourceRoot, Files = scan.Files, Folders = [], Problems = [], Units = scan.Units,
             SkippedFolders = [new SkippedFolder(@"Card\ascmhl", "ASC MHL checksum manifests")],
         };
-        Assert.Contains(Plan(withManifests, Env()).Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("This folder has checksum manifests"));
-        Assert.DoesNotContain(Plan(scan, Env()).Messages, m => m.Text.StartsWith("This folder has checksum manifests"));
+        Assert.Contains(Plan(withManifests, Env()).Messages, m => m.Level == MessageLevel.Warning && m.Text.StartsWith("The source folder has checksum manifests"));
+        Assert.DoesNotContain(Plan(scan, Env()).Messages, m => m.Text.StartsWith("The source folder has checksum manifests"));
     }
 
     [Fact]
@@ -863,8 +867,8 @@ public class PlannerTests
         Directory.CreateDirectory(Path.Join(t.Target, "d"));
         File.WriteAllText(Path.Join(t.Target, @"d\C0001.MP4"), "different");
         MovePlan plan = t.Plan();
-        Assert.Contains(plan.ByType, x => x.Classification == "Name taken in target (different)" && !x.Moves);
-        Assert.Contains(plan.ByType, x => x.Classification == "Held with its clip" && !x.Moves);
+        Assert.Contains(plan.ByType, x => x.Classification == "Name taken in target folder (different)" && !x.Moves);
+        Assert.Contains(plan.ByType, x => x.Classification == "Kept with its clip" && !x.Moves);
         FolderSummary d = Assert.Single(plan.ByFolder);
         Assert.Equal((0, 2), (d.MovingFiles, d.StayingFiles));
     }

@@ -72,25 +72,30 @@ public sealed class UndoPreview
         }
         int count = GoingBack.Count + PlaceTaken.Count;
         lines.Add(count == 0
-            ? $"Nothing can go back to {To}."
-            : $"{JobReports.Files(count)} ({Format.Bytes(GoingBackBytes + PlaceTaken.Sum(i => i.Size))}) will go back from {From} to {To}.");
+            ? $"Nothing can return to {To}."
+            : $"{JobReports.Files(count)} ({Format.Bytes(GoingBackBytes + PlaceTaken.Sum(i => i.Size))}) will return from {From} to {To}.");
         if (DriveLetterChanged)
-            lines.Add($"The drive of {Original.Header.Source} has another letter now ({Drives.Letter(To)}), so the files go back to {To}.");
+            lines.Add($"The drive of {Original.Header.Source} has a different letter now ({Drives.Letter(To)}), so the files return to {To}.");
         if (ToNote is not null) lines.Add(ToNote);
         if (count > 0)
             lines.Add(Method == TransferMethod.Rename
-                ? "Same drive: the files are renamed back; no file data is copied."
-                    + (Original.Header.Verify ? " Each file's checksum is compared with the one recorded when it was sorted, and a file that changed stays where it is." : "")
-                : "Different drives: each file is copied back and read back from disk, and the file in the sorted folder is read a second time; "
-                  + "both must match the checksum recorded when it was sorted before the file in the sorted folder is removed.");
-        if (CreatesFolder) lines.Add($"{To} no longer exists; it will be created (on the drive the files came from).");
+                ? "Same drive: the undo renames each file to its old path. It copies no file data."
+                    + (Original.Header.Verify
+                        ? " The undo compares the checksum of each file with the checksum that the sort recorded. If a file changed, it stays where it is."
+                        : "")
+                : "Different drives: the undo copies each file to its old folder and reads the copy again from the disk. "
+                  + "It also reads the file in the target folder a second time. "
+                  + "The undo removes a file from the target folder only when the copy and the second read both match the checksum that the sort recorded.");
+        if (CreatesFolder) lines.Add($"{To} no longer exists. The undo will make this folder again, on the drive that the files came from.");
         if (PlaceTaken.Count > 0)
-            lines.Add($"{JobReports.Files(PlaceTaken.Count)} {(PlaceTaken.Count == 1 ? "has" : "have")} a file with the same name in the original place. They are compared: "
-                + "an identical file is left as it is, and a different one is never overwritten (both are kept).");
+            lines.Add($"{JobReports.Files(PlaceTaken.Count)} {(PlaceTaken.Count == 1 ? "has" : "have")} a file with the same name in the original location. "
+                + "The undo compares the two files. If they are identical, the undo does not change them. "
+                + "If they are different, the undo never overwrites a file: it keeps both.");
         if (AlreadyBack.Count > 0)
-            lines.Add($"{JobReports.Files(AlreadyBack.Count)} {(AlreadyBack.Count == 1 ? "is" : "are")} already back in the original place; nothing is done with them.");
+            lines.Add($"{JobReports.Files(AlreadyBack.Count)} {(AlreadyBack.Count == 1 ? "is" : "are")} already back in the original location. "
+                + $"The undo does not include {(AlreadyBack.Count == 1 ? "it" : "them")}.");
         foreach (var group in CannotGoBack.GroupBy(i => i.Reason).OrderByDescending(g => g.Count()))
-            lines.Add($"{JobReports.Files(group.Count())} can't go back: {group.Key}.");
+            lines.Add($"{JobReports.Files(group.Count())} cannot return: {group.Key}.");
         return lines;
     }
 
@@ -155,7 +160,7 @@ public static class UndoFactory
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
             {
-                blocked = $"The drives cannot be read: {e.Message}";
+                blocked = $"The drives are not readable: {e.Message}";
             }
         }
         var preview = new UndoPreview
@@ -207,8 +212,8 @@ public static class UndoFactory
         // Copying back needs room for the files that go back (a file whose place is taken is never copied).
         if (how == TransferMethod.Copy && toVolume is not null && (request.FreeBytes ?? toVolume.FreeBytes) is var free
             && preview.GoingBackBytes + Planner.FreeSpaceMargin > free)
-            preview.Blocked = $"Not enough free space on {toVolume.DisplayNameWithLabel} to move the files back: {Format.Bytes(preview.GoingBackBytes)} needed, "
-                + $"{Format.Bytes(Math.Max(0, free - Planner.FreeSpaceMargin))} available. Free up space, then undo.";
+            preview.Blocked = $"Not enough free space on {toVolume.DisplayNameWithLabel} to return the files: the files need {Format.Bytes(preview.GoingBackBytes)}, "
+                + $"and {Format.Bytes(Math.Max(0, free - Planner.FreeSpaceMargin))} is available. Make more space available on the drive. Then try the undo again.";
         return preview;
     }
 
@@ -246,7 +251,7 @@ public static class UndoFactory
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            throw new JournalException($"The undo could not be prepared: {e.Message}", e);
+            throw new JournalException($"The undo could not start: {e.Message}", e);
         }
     }
 
@@ -261,7 +266,7 @@ public static class UndoFactory
         string from = preview.From, to = preview.To;
         TransferMethod how = preview.Method;
         // A folder is only ever recreated on the drive the files came from (matched by its serial number).
-        if (!preview.CreatesFolder && !SafeFile.DirectoryExists(to)) throw new JournalException($"The folder {to} no longer exists. Undo again to see where the files can go.");
+        if (!preview.CreatesFolder && !SafeFile.DirectoryExists(to)) throw new JournalException($"The folder {to} no longer exists. Start the undo again to see where the files can go.");
 
         VolumeInfo fromVolume = VolumeInfo.Of(from), toVolume = VolumeInfo.Of(to);
         // Every moved file except those already back: the ones that cannot go back are reported by the undo, with why.
@@ -371,27 +376,27 @@ public static class UndoFactory
     private static string? WhyBlocked(JobState original, string journalPath, List<JobState> undoJobs, string? notConnected)
     {
         if (original.IsBackup) return "This is the log of a backup. A backup only copies, so there is nothing to undo.";
-        if (original.IsUndo) return "This is an undo job. An undo can't be undone - to separate the files again, run a new sort.";
+        if (original.IsUndo) return "This is an undo job. You cannot undo an undo. To separate the files again, start a new sort.";
         if (!original.PlanComplete) return "This sort never started, so there is nothing to undo.";
-        if (!original.IsEnded) return "This sort has not finished yet. Resume it (or end it) first, then undo it.";
-        if (original.DoneCount == 0) return "Nothing to undo: this sort did not move any files.";
+        if (!original.IsEnded) return "This sort is not finished yet. Resume it or end it first. Then undo it.";
+        if (original.DoneCount == 0) return "There is nothing to undo: this sort did not move any files.";
         if (JobPaths.RootOfJournal(journalPath) is null)
-            return $"Open the job log from the {JobPaths.LogFolderName} folder (or {JobPaths.IvarIngestLogFolderName} or {JobPaths.IngestSorterLogFolderName} for older sorts) inside the sorted folder, "
-                + "not a copy of it, so the files can be found.";
+            return $"Open the job log in the {JobPaths.LogFolderName} folder (or {JobPaths.IvarIngestLogFolderName} or {JobPaths.IngestSorterLogFolderName} for older sorts) in the target folder, "
+                + "not a copy of the log. The undo can find the files only from that log.";
 
         // The undo jobs' own logs are the truth (an undo's end may not have reached the sort's log).
         foreach (JobState undo in undoJobs)
         {
-            if (!undo.IsEnded) return $"This sort is already being undone (undo job {undo.Header.Id}). Resume that job instead.";
+            if (!undo.IsEnded) return $"An undo of this sort is already in progress (undo job {undo.Header.Id}). Resume that job instead.";
             if (undo.End!.What == "completed" && undo.StillInSourceCount + undo.MissingCount == 0)
-                return $"This sort was already undone (undo job {undo.Header.Id}, {Date(undo.End.At)}).";
+                return $"This sort is already undone (undo job {undo.Header.Id}, {Date(undo.End.At)}).";
         }
         if (original.UndoneBy is { } mark && !undoJobs.Any(j => j.Header.Id == mark.JobId))
         {
             // That undo's log is not in the original folder (its drive is not connected, or the log was removed): trust the mark.
-            if (mark.Status == "completed") return $"This sort was already undone (undo job {mark.JobId}, {Date(mark.At)}).";
+            if (mark.Status == "completed") return $"This sort is already undone (undo job {mark.JobId}, {Date(mark.At)}).";
             if (mark.Status == UndoneStarted && File.Exists(mark.JournalPath))
-                return $"This sort is already being undone (undo job {mark.JobId}). Resume that job instead.";
+                return $"An undo of this sort is already in progress (undo job {mark.JobId}). Resume that job instead.";
             // "closed", or an undo whose log was deleted before it ran: a new undo takes what is left.
         }
         return notConnected;
@@ -438,8 +443,8 @@ public static class UndoFactory
                 // sort recorded (a copy keeps the files' dates). The user decides.
                 if (elsewhere)
                     return new Destination(candidate, NeedsFolder: true, Blocked:
-                        $"Two folders could be the one the files came from: {started}, which holds this sort's receipt, and {candidate}, which matches what the sort recorded "
-                        + "but has no receipt. Choose the folder the files should go back to.");
+                        $"It is not clear which folder the files came from. {started} has the receipt of this sort. {candidate} matches the data that the sort recorded, "
+                        + "but it has no receipt. Choose the folder that the files return to.");
                 return new Destination(candidate);
             }
         }
@@ -462,18 +467,20 @@ public static class UndoFactory
 
         if (unconfirmed is not null)
             return new Destination(unconfirmed, NeedsFolder: true, Blocked:
-                $"The folder {unconfirmed} is not the one the files came from: it holds no receipt of this sort, and nothing in it matches what the sort recorded "
-                + "(the original folder may have been renamed, and another folder given its name). Choose the folder the files came from.");
+                $"The folder {unconfirmed} is not the folder that the files came from. It has no receipt of this sort, and nothing in it matches the data that the sort recorded. "
+                + "It is possible that someone renamed the source folder and gave its name to a different folder. Choose the folder that the files came from.");
         if (creatable is not null) return new Destination(creatable, CreatesFolder: true);
         if (otherLetter is not null)
             return new Destination(h.Source, Blocked:
-                $"The drive that held {h.Source}{drive} seems to have another letter now ({Drives.Letter(otherLetter)}), but {otherLetter} could not be confirmed as the folder "
-                + $"the files came from. Give the drive its old letter {Drives.Letter(h.Source)} back (Windows Disk Management > Change Drive Letter), then undo.");
+                $"It is possible that the drive that held {h.Source}{drive} has a different letter now ({Drives.Letter(otherLetter)}). "
+                + $"But the undo cannot confirm that {otherLetter} is the folder that the files came from. "
+                + $"In Windows Disk Management, use Change Drive Letter to give the drive its old letter ({Drives.Letter(h.Source)}) again. Then try the undo again.");
         if (candidates.Count > 0)
             return new Destination(h.Source, NeedsFolder: true, Blocked:
-                $"{h.Source} no longer exists, and the drive now at {Drives.Letter(h.Source)} can't be confirmed as the drive the files came from "
-                + "(this sort recorded no serial number for it, or it can't be read), so the folder is not created there. Choose the folder the files should go back to.");
-        return new Destination(h.Source, Blocked: $"The drive that held {h.Source}{drive} is not connected. Connect it, then undo.");
+                $"{h.Source} no longer exists. The undo cannot confirm that the drive at {Drives.Letter(h.Source)} is the drive that the files came from "
+                + "(the sort recorded no serial number for it, or the drive is not readable). For this reason, the undo does not make the folder on that drive. "
+                + "Choose the folder that the files return to.");
+        return new Destination(h.Source, Blocked: $"The drive that held {h.Source}{drive} is not connected. Connect it. Then try the undo again.");
     }
 
     /// <summary>A folder the user chose: taken as it is, as long as it exists and is not the sorted folder.</summary>
@@ -488,11 +495,12 @@ public static class UndoFactory
         {
             return new Destination(chosen, NeedsFolder: true, Blocked: $"{chosen} is not a folder path.");
         }
-        if (!SafeFile.DirectoryExists(full)) return new Destination(full, NeedsFolder: true, Blocked: $"The folder {full} does not exist. Choose the folder the files came from.");
+        if (!SafeFile.DirectoryExists(full)) return new Destination(full, NeedsFolder: true, Blocked: $"The folder {full} does not exist. Choose the folder that the files came from.");
         // (The sorted folder may be inside the folder the files came from: a target inside the source is allowed.)
         if (JobPaths.SamePath(full, from) || Planner.IsInside(full, from))
-            return new Destination(full, NeedsFolder: true, Blocked: $"The files can't go back into {full}: that is the sorted folder, or a folder inside it. Choose the folder the files came from.");
-        return new Destination(full, Note: $"The files go back to {full}, the folder you chose.");
+            return new Destination(full, NeedsFolder: true,
+                Blocked: $"The files cannot return to {full}: it is the target folder of the sort, or a folder in it. Choose the folder that the files came from.");
+        return new Destination(full, Note: $"The files return to {full}, the folder that you chose.");
     }
 
     /// <summary>
@@ -509,13 +517,14 @@ public static class UndoFactory
         JobPaths.SamePath(candidate, h.Source) || h.SourceReal is { } real && JobPaths.SamePath(candidate, real);
 
     private static string Renamed(string source, string now) => SafeFile.DirectoryExists(source)
-        ? $"{source} can't be confirmed as the folder the files came from any more (the folder was probably renamed or moved, and its name given to another "
-          + $"folder). The files go back to {now}, which holds this sort's receipt."
-        : $"{source} is not there any more (it was renamed or moved): the files go back to {now}, which holds this sort's receipt.";
+        ? $"The undo can no longer confirm that {source} is the folder that the files came from. "
+          + $"Probably, someone renamed or moved that folder and gave its name to a different folder. The files return to {now}, which has the receipt of this sort."
+        : $"{source} is no longer there (someone renamed or moved it). The files return to {now}, which has the receipt of this sort.";
 
     private static string CopyOfReceipt(string started, string original) =>
-        $"The files go back to {original}, the folder they came from (it is still there, with this sort's receipt). {started} holds a copy of the receipt "
-        + "(it is probably a copy of that folder) and is left as it is. To put the files somewhere else, choose the folder.";
+        $"The files return to {original}, the folder that they came from (it is still there, with the receipt of this sort). "
+        + $"{started} has a copy of the receipt (it is probably a copy of that folder). The undo does not change {started}. "
+        + "To return the files to a different folder, choose that folder.";
 
     private static bool SameFolder(string a, string b) => JobPaths.SamePath(a, b);
 
@@ -587,8 +596,8 @@ public static class UndoFactory
             File.Exists(JobPaths.ReceiptTextPath(folder, jobId, name)) || File.Exists(JobPaths.ReceiptCsvPath(folder, jobId, name)));
 
     private static string NothingCanGoBack(UndoPreview preview) => preview.CannotGoBack.Count == 0
-        ? $"Nothing to undo: every file of this sort is already back in {preview.To}."
-        : "Nothing can go back: " + string.Join("; ", preview.CannotGoBack.GroupBy(i => i.Reason).Select(g => $"{JobReports.Files(g.Count())} {g.Key}")) + ".";
+        ? $"There is nothing to undo: every file of this sort is already back in {preview.To}."
+        : "No file can return. " + string.Join(". ", preview.CannotGoBack.GroupBy(i => i.Reason).Select(g => $"{JobReports.Files(g.Count())}: {g.Key}")) + ".";
 
     /// <summary>
     /// Undo jobs of the given sort whose logs are in the folder's log folders. An undo log whose plan was never
@@ -666,7 +675,7 @@ public static class UndoFactory
             {
                 string journal = full[..^suffix.Length] + JobPaths.JournalSuffix;
                 if (File.Exists(journal)) return journal;
-                whyNot = $"There is no job log next to {full} (it would be {Path.GetFileName(journal)}).";
+                whyNot = $"There is no job log next to {full} (the expected name is {Path.GetFileName(journal)}).";
                 return null;
             }
         foreach (string suffix in new[] { JobPaths.ReceiptCsvSuffix, JobPaths.ReceiptTextSuffix })
@@ -704,7 +713,7 @@ public static class UndoFactory
                     : JobPaths.WhyNotReachable(recorded, LogDriveSerial(Path.Join(folder, id + JobPaths.ReceiptTextSuffix), id), Drives.Letter(recorded));
                 return null;
             }
-        whyNot = $"{full} is not a job log, a job's manifest or summary, or a receipt.";
+        whyNot = $"{full} is not a job log, the manifest or summary of a job, or a receipt.";
         return null;
     }
 

@@ -110,9 +110,9 @@ public static partial class Classifier
             f.NaturalSide = NaturalSide(f, facts, tree[f.Directory]);
             return Set(f, MediaSide.Neutral, FileRole.Other,
                 f.NaturalSide != MediaSide.Neutral
-                    ? $"online-only cloud placeholder ({Word(f.NaturalSide)}, not downloaded) - stays; make it available offline to move it"
+                    ? $"online-only cloud placeholder ({Word(f.NaturalSide)}, not downloaded) - stays. To move it, make it available offline."
                     : MediaRules.PrimarySide(ext) == MediaSide.Video
-                        ? "online-only cloud placeholder (a Live Photo clip or a video - it is not downloaded, so it cannot be told) - stays; make it available offline to sort it"
+                        ? "online-only cloud placeholder (Live Photo clip or video: unknown until you download it) - stays. To sort it, make it available offline."
                         : "online-only cloud placeholder - stays",
                 FileNote.OnlineOnly);
         }
@@ -161,8 +161,8 @@ public static partial class Classifier
             unit = mission;
             f.GroupKey = mission.GroupKey;
             return MediaRules.PhotoExtensions.Contains(ext)
-                ? Set(f, MediaSide.Photo, FileRole.Primary, $"photo ({label}), part of a DJI mapping/LiDAR mission ({mission.Marker} found)")
-                : Set(f, MediaSide.Photo, FileRole.Sidecar, $"part of a DJI mapping/LiDAR mission ({mission.Marker} found)");
+                ? Set(f, MediaSide.Photo, FileRole.Primary, $"photo ({label}), part of a DJI mapping/LiDAR mission (the folder has {mission.Marker})")
+                : Set(f, MediaSide.Photo, FileRole.Sidecar, $"part of a DJI mapping/LiDAR mission (the folder has {mission.Marker})");
         }
 
         switch (MediaRules.PrimarySide(ext))
@@ -174,7 +174,7 @@ public static partial class Classifier
                 // Real stills, so they stay photos, but the frames of one hyperlapse are kept together (the preview warns).
                 f.GroupKey = hyperlapse.Folder;
                 return Set(f, MediaSide.Photo, FileRole.Primary,
-                    $"photo ({label}), a source frame of the DJI hyperlapse {hyperlapse.Name} ({hyperlapse.Frames:N0} frames) - kept with its folder",
+                    $"photo ({label}), a still frame of the DJI hyperlapse {hyperlapse.Name} ({hyperlapse.Frames:N0} frames) - stays together with its folder",
                     FileNote.HyperlapseFrame);
             case MediaSide.Photo:
                 f.GroupKey = PrimaryKey(f);
@@ -265,7 +265,7 @@ public static partial class Classifier
             Set(f, rule.Unmatched, FileRole.Sidecar, $"{rule.UnmatchedReason ?? rule.Kind} - goes with the {Word(rule.Unmatched)}s",
                 MediaRules.IsAudio(f.Extension) ? FileNote.UnmatchedAudio : FileNote.None);
         else
-            Set(f, MediaSide.Neutral, FileRole.Sidecar, $"{rule.Kind} with no matching photo or video here - stays");
+            Set(f, MediaSide.Neutral, FileRole.Sidecar, $"{rule.Kind} with no photo or video of the same name here - stays");
     }
 
     /// <summary>
@@ -298,7 +298,7 @@ public static partial class Classifier
             Set(f, side, FileRole.Sidecar,
                 $"{kind} for the recordings next to it ({recordings[0].Name}{(recordings.Count > 1 ? ", ..." : "")})" + Suffix(side));
         else
-            Set(f, MediaSide.Neutral, FileRole.Sidecar, $"{kind} - the recordings next to it do not all go the same way - stays", FileNote.Ambiguous);
+            Set(f, MediaSide.Neutral, FileRole.Sidecar, $"{kind} - stays: the recordings next to it do not all go the same way", FileNote.Ambiguous);
     }
 
     private static bool IsRecorderProject(SourceFile f) => MediaRules.RecorderProjectExtensions.Contains(f.Extension);
@@ -307,7 +307,7 @@ public static partial class Classifier
     {
         SourceFile? owner = tree.Find(f.Directory, f.Name[2..]);
         if (owner is null)
-            Set(f, MediaSide.Neutral, FileRole.Sidecar, "macOS resource file with no matching file - stays");
+            Set(f, MediaSide.Neutral, FileRole.Sidecar, "macOS resource file (the file that it belongs to is not here) - stays");
         else
         {
             Set(f, owner.Side, FileRole.Sidecar, $"macOS resource file for {owner.Name}" + Suffix(owner.Side));

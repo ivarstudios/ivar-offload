@@ -84,17 +84,17 @@ public class BackupTopUpTests
         Assert.Equal(7, offer.Unchanged);
         Assert.Equal([t.Dest(0), t.Dest(1)], offer.Folders.Select(f => f.Folder));
         string text = offer.Describe(adding: false, plan.Files.Count);
-        Assert.Contains("the card has 2 new files since then", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("add what is missing to that backup and verify the whole card", text);
+        Assert.Contains("the card now has 2 new files", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("add what is missing to that backup and check the whole card", text);
         // The earlier backup is described once (by the offer), not again in the notes.
-        Assert.DoesNotContain(plan.Messages, m => m.Text.Contains("already backed up"));
+        Assert.DoesNotContain(plan.Messages, m => m.Text.Contains("already a backup") || m.Text.Contains("already in a backup"));
 
         BackupPlan adding = TopUp(t);
         Assert.True(adding.CanRun, Messages(adding));
         Assert.True(adding.IsTopUp);
         Assert.Equal([t.Dest(0), t.Dest(1)], adding.Targets.Select(x => x.Folder));
-        Assert.Contains("2 new files are copied", adding.TopUp!.Describe(adding: true, adding.Files.Count));
-        Assert.Contains("all 9 files on the card are read again", adding.TopUp.Describe(adding: true, adding.Files.Count));
+        Assert.Contains("It copies 2 new files.", adding.TopUp!.Describe(adding: true, adding.Files.Count));
+        Assert.Contains("it reads all 9 files on the card again", adding.TopUp.Describe(adding: true, adding.Files.Count));
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public class BackupTopUpTests
 
         BackupPlan one = Full(t, "second", 2);
         Assert.Null(one.TopUp);
-        Assert.Contains("has none of this card", one.TopUpRefusal);
+        Assert.Contains("There is no backup of this card in", one.TopUpRefusal);
         Assert.Contains(one.Messages, m => m.Level == MessageLevel.Info && m.Text == one.TopUpRefusal);
 
         // Another full backup of the card to the second destination only: the two hold different backups.
@@ -194,7 +194,7 @@ public class BackupTopUpTests
         Assert.Equal(2, AscMhl.GenerationsIn(t.Dest(0))); // the folder's history got a second generation
         Assert.Equal(metadata, t.CardMetadata()); // the card was only read
         Assert.False(Directory.Exists(Path.Join(t.Dest(0), JobPaths.LogFolderName, BackupRunner.ReplacedFolderName)));
-        Assert.Contains("already in the backup, read again", File.ReadAllText(BackupPaths.SummaryPath(TopUpJournal(t.Dest(0)))));
+        Assert.Contains("already in the backup: for these, IVAR Offload read the card and the copy again", File.ReadAllText(BackupPaths.SummaryPath(TopUpJournal(t.Dest(0)))));
     }
 
     [Fact]
@@ -313,7 +313,7 @@ public class BackupTopUpTests
         Assert.True(result.AllVerified, $"{result.Status} {result.Message}");
         Assert.Equal(1, result.Destinations[0].KeptEdited);
         Assert.Equal(now, File.ReadAllBytes(edited));
-        Assert.Contains("edited by another program", string.Join("\n", BackupTexts.TopUpLines(result)));
+        Assert.Contains("changed there after the earlier backup (possibly because another program edited it)", string.Join("\n", BackupTexts.TopUpLines(result)));
     }
 
     [Fact]
@@ -325,7 +325,7 @@ public class BackupTopUpTests
         File.AppendAllText(arw, "edited");
 
         BackupPlan plan = TopUp(t);
-        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("changed there since the earlier backup (edited by another program?)"));
+        Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("changed there after the earlier backup. It is possible that a different program edited it."));
         BackupResult result = t.Run(plan);
         Assert.True(result.AllVerified, $"{result.Status} {result.Message}");
         t.AssertExactCopy(0, card);
@@ -340,11 +340,11 @@ public class BackupTopUpTests
         Rewrite(t, Jpg, 40_000); // the camera numbered a new shot like one deleted in camera
         Rewrite(t, MediaPro); // an index file: expected to change, not named
         BackupPlan plan = TopUp(t);
-        PlanMessage warning = Assert.Single(plan.Messages, m => m.Text.Contains("number the camera used again"));
+        PlanMessage warning = Assert.Single(plan.Messages, m => m.Text.Contains("a number that the camera used again"));
         Assert.Equal(MessageLevel.Warning, warning.Level);
         Assert.StartsWith("1 file on the card has the name", warning.Text);
         Assert.Contains(Jpg, warning.Text);
-        Assert.Contains("stays next to the card's, renamed \"DSC00001 (earlier).JPG\"", warning.Text);
+        Assert.Contains("stays next to the card's version, with the name \"DSC00001 (earlier).JPG\"", warning.Text);
     }
 
     private const string Earlier = @"DCIM\100MSDCF\DSC00001 (earlier).JPG";
@@ -369,9 +369,9 @@ public class BackupTopUpTests
             Assert.EndsWith("MEDIAPRO.XML", Assert.Single(Replaced(t.Dest(k))));
         }
         string all = string.Join("\n", BackupTexts.TopUpLines(result));
-        Assert.Contains("1 photo or clip changed on the card since the earlier backup (usually another shot with a reused number)", all);
+        Assert.Contains("1 photo or clip changed on the card after the earlier backup (usually another shot with a reused number)", all);
         Assert.Contains(Earlier, all);
-        Assert.StartsWith("2 new files copied, 2 copied again, all 9 files checked", BackupTexts.Describe(result).LeftLine);
+        Assert.StartsWith("The app copied 2 new files, copied 2 other files again and checked all 9 files", BackupTexts.Describe(result).LeftLine);
 
         // Verify again reads it too, and a later top-up keeps it like any file no longer on the card.
         Assert.True(BackupVerifier.Verify(TopUpJournal(t.Dest(0))).AllGood);
@@ -535,7 +535,7 @@ public class BackupTopUpTests
         Assert.True(t.Run(t.Plan()).AllVerified);
         BackupPlan plan = TopUp(t);
         Assert.True(plan.CanRun, Messages(plan));
-        Assert.Contains("verify the whole card against that backup (nothing is copied again)", Full(t, "second").TopUp!.Describe(adding: false, plan.Files.Count));
+        Assert.Contains("check the whole card against that backup (this copies no files again)", Full(t, "second").TopUp!.Describe(adding: false, plan.Files.Count));
         BackupResult result = t.Run(plan);
         Assert.True(result.AllVerified);
         Assert.All(result.Destinations, d => Assert.Equal((0, 7), (d.Copied, d.Rechecked)));
@@ -811,7 +811,7 @@ public class BackupTopUpMhlTests
 
         BackupPlan plan = BackupPlanner.Build(BackupScanner.Scan(t.Card), t.Parents.Take(2).ToList(), "second");
         Assert.Null(plan.TopUp);
-        Assert.Contains("that it did not have when it was backed up", plan.TopUpRefusal);
+        Assert.Contains("that it did not have at the time of the backup", plan.TopUpRefusal);
     }
 
     [Fact]
