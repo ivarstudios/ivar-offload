@@ -521,7 +521,7 @@ and GUI tests. Don't use the mouse or keyboard while the GUI tests run.
   step of every move, copy, backup and ASC MHL step followed by resume or ending the job, drives and cards that
   disappear, damaged copies, top-ups, undo, and the result wording. The `ascmhl` tests run the reference tool on every
   destination.
-- **`tools/New-SampleIngest.ps1`** builds a synthetic ingest modelled on real card dumps (DJI, Fuji, Nikon, Sony,
+- **`tools/New-SampleIngest.ps1`** builds a synthetic ingest modelled on typical card layouts (DJI, Fuji, Nikon, Sony,
   GoPro, Skydio, Olympus, Blackmagic, field recorders, P2/XF/XDCAM/RED cards, CinemaDNG, mapping missions, phones,
   libraries and projects) with edge cases (paths over 260 characters, emoji and å/ä/ö, read-only and hidden files,
   sync folders), and a manifest of the expected outcome.

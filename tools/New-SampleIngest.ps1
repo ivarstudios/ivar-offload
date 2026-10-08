@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Creates a synthetic ingest folder that mirrors real card dumps (DJI, Fuji, Nikon, Sony, GoPro, Skydio, Olympus,
+  Creates a synthetic ingest folder that mirrors typical camera card layouts (DJI, Fuji, Nikon, Sony, GoPro, Skydio, Olympus,
   Panasonic P2, Canon XF, XDCAM EX, RED, Blackmagic, Atomos, field recorders, phones, mapping missions, hyperlapses,
   photogrammetry processing folders), plus edge cases, and writes a manifest with the expected outcome and fingerprint
   of every file.
@@ -246,10 +246,10 @@ Add-File "$d\MISC\sd_info.txt" 'stay' 300
 Add-File 'Video.Conflict1\240115 Ski Trip -VIDEO\DJI_0004.MOV' 'video' (10 * $MB)
 Add-File 'Video.Conflict1\240115 Ski Trip -VIDEO\2\DJI_0035.MOV' 'video' (4 * $MB)
 $d = 'VIDEO\JOB-000123-Interview-Video'
-Add-File "$d\JOB-000123_211008-06335.mov" 'video' (10 * $MB)
-Add-File "$d\JOB-000123_211008-06336.mp4" 'video' (6 * $MB)
+Add-File "$d\JOB-000123_240118-00001.mov" 'video' (10 * $MB)
+Add-File "$d\JOB-000123_240118-00002.mp4" 'video' (6 * $MB)
 Add-File "$d\JOB-000123-Interview Video log.xlsx" 'stay' (480 * $KB)
-Add-File "$d\.LP_Store\JOB-000123_211008-06335.mov.lpmd" 'video' 400
+Add-File "$d\.LP_Store\JOB-000123_240118-00001.mov.lpmd" 'video' 400
 Add-File 'temp ingest\DCIM\121_FUJI\.LP_Store\Photographer-XX-X100V-20240116-1200-DSCF0183.MOV.lpmd' 'video' 400
 Add-File 'temp ingest\UNTITLED\FFDB\FFXFER.DAT' 'stay' (4 * $KB)
 
@@ -392,9 +392,9 @@ Add-File "$d\ATOMOS_NINJAV_S001_S001_T002.MOV" 'video' (3 * $MB)
 Add-File "$d\ATOMOS_NINJAV_S001.fcpxml" 'stay' (20 * $KB)
 
 # --- DJI hyperlapse: the source frames are photos, kept together; the finished hyperlapse is a video --------------------
-$d = 'Stills\250916-Mavic3Pro\DCIM'
+$d = 'Stills\240121-Mavic3Pro\DCIM'
 foreach ($n in 1..12) { Add-File ("$d\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_{0:D4}.JPG" -f $n) 'photo' (100 * $KB) }
-Add-File "$d\DJI_001\DJI_20250916181000_0005_D.MP4" 'video' (3 * $MB)
+Add-File "$d\DJI_001\DJI_20240121120000_0005_D.MP4" 'video' (3 * $MB)
 
 # --- Two bodies counting the same numbers (D850 NEF, Z9 MOV): the raw's edit settings (.xmp) follow the raw -------------
 $d = 'Stills\250921-D850-Z9'

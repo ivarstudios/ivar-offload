@@ -148,10 +148,10 @@ public class ClassifierTests
             @"Deliv\Farm_ortho_small.prj=photo", @"Deliv\Farm_mesh.obj=stay", @"Deliv\Farm.laz=stay", @"Deliv\lonely.prj=stay"] },
         { "Base-station and ground control data outside a mission stays", [
             @"Roof\DCIM\M\DJI_0001.JPG=photo", @"Roof\DCIM\M\DJI_Timestamp.MRK=photo", @"Roof\DCIM\M\DJI_Rinex.obs=photo",
-            @"Roof\BASE\DRTK3_20240913.24O=stay", @"Roof\BASE\DRTK3_20240913.24N=stay", @"Roof\BASE\base.ubx=stay", @"Roof\GCP\gcp_list.csv=stay"] },
+            @"Roof\BASE\DRTK3_20240119.24O=stay", @"Roof\BASE\DRTK3_20240119.24N=stay", @"Roof\BASE\base.ubx=stay", @"Roof\GCP\gcp_list.csv=stay"] },
         { "DJI hyperlapse source frames are photos; the finished hyperlapse is a video", [
             @"M3\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0001.JPG=photo", @"M3\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0002.JPG=photo",
-            @"M3\DCIM\DJI_001\DJI_20240916181000_0005_D.MP4=video"] },
+            @"M3\DCIM\DJI_001\DJI_20240120120000_0005_D.MP4=video"] },
         { "An .xmp next to a raw photo and an MOV/MP4 of the same name holds the raw's edits", [
             @"x\DSC_0001.NEF=photo", @"x\DSC_0001.MOV=video", @"x\DSC_0001.xmp=photo",
             @"y\DSC_0002.NEF=photo", @"y\DSC_0002.MTS=video", @"y\DSC_0002.xmp=stay",
@@ -293,7 +293,7 @@ public class ClassifierTests
     }
 
     /// <summary>
-    /// F03: Canon bodies and iPhones both count IMG_0001, ... A real clip with a Canon photo's name (or any clip without
+    /// Canon bodies and iPhones both count IMG_0001, ... A real clip with a Canon photo's name (or any clip without
     /// Apple's Live Photo tag) is a video and is pointed out; only a tagged clip stays with its photo. Big clips are never read.
     /// </summary>
     [Fact]
@@ -483,7 +483,7 @@ public class ClassifierTests
         Classifier.Classify(withTags, null, "Card", f => { probed.Add(f.RelativePath); return true; });
         Assert.All(withTags.Where(f => f.Directory == "X7_0012"), f => Assert.Equal(MediaSide.Video, f.Side));
         Assert.Contains("CinemaDNG clip X7_0012 (12 frames)", withTags.First(f => f.Directory == "X7_0012").Reason);
-        // One frame read per run, and only where no sound file decides. Changed deliberately (F06): tagged frames with gaps
+        // One frame read per run, and only where no sound file decides. Changed deliberately: tagged frames with gaps
         // are still one clip (with its sound), and the preview warns about the missing frames.
         Assert.Equal(new[] { @"X7_0012\X7_0012_000000.DNG", @"Gappy\Gappy_000000.dng" }, probed);
         Assert.All(withTags.Where(f => f.Directory == "Gappy"), f => Assert.Equal(MediaSide.Video, f.Side));
@@ -491,7 +491,7 @@ public class ClassifierTests
     }
 
     /// <summary>
-    /// F06: CinemaDNG movie tags decide on their own. A lost frame, a clip of fewer than 10 frames or a renamed folder
+    /// CinemaDNG movie tags decide on their own. A lost frame, a clip of fewer than 10 frames or a renamed folder
     /// without sound (a drone camera) keeps the frames together as one clip, with its sound. Untagged runs are unchanged.
     /// </summary>
     [Fact]
@@ -595,7 +595,7 @@ public class ClassifierTests
     [Fact]
     public void Survey_data_and_hyperlapse_frames_are_named_for_what_they_are()
     {
-        var entries = new List<(string, long)> { (@"Roof\BASE\DRTK3_20240913.24O", 1), (@"Roof\GCP\GCPs.txt", 1), (@"Roof\GCP\notes.txt", 1) };
+        var entries = new List<(string, long)> { (@"Roof\BASE\DRTK3_20240119.24O", 1), (@"Roof\GCP\GCPs.txt", 1), (@"Roof\GCP\notes.txt", 1) };
         for (int i = 1; i <= 30; i++) entries.Add(($@"M3\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_{i:D4}.JPG", 1));
         entries.Add((@"M3\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0001.xmp", 1));
         entries.Add((@"M3\DCIM\100MEDIA\DJI_0001.JPG", 1));
@@ -605,10 +605,10 @@ public class ClassifierTests
         entries.Add((@"Air\DCIM\100MEDIA\DJI_0003.JPG", 1));
         var r = Classify(entries.ToArray());
 
-        Assert.Equal((MediaSide.Neutral, FileNote.SurveyData), (r[@"Roof\BASE\DRTK3_20240913.24O"].Side, r[@"Roof\BASE\DRTK3_20240913.24O"].Note));
+        Assert.Equal((MediaSide.Neutral, FileNote.SurveyData), (r[@"Roof\BASE\DRTK3_20240119.24O"].Side, r[@"Roof\BASE\DRTK3_20240119.24O"].Note));
         Assert.Equal(FileNote.SurveyData, r[@"Roof\GCP\GCPs.txt"].Note);
         Assert.Equal(FileNote.None, r[@"Roof\GCP\notes.txt"].Note);
-        Assert.False(r[@"Roof\BASE\DRTK3_20240913.24O"].NeedsAttention);
+        Assert.False(r[@"Roof\BASE\DRTK3_20240119.24O"].NeedsAttention);
 
         SourceFile frame = r[@"M3\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0017.JPG"];
         Assert.Equal((MediaSide.Photo, FileNote.HyperlapseFrame), (frame.Side, frame.Note));
@@ -1036,7 +1036,7 @@ public class ScannerAndPlannerTests
         Assert.Contains(plan.Messages, m => m.Level == MessageLevel.Warning && m.Text.Contains("Resilio Sync"));
     }
 
-    /// <summary>A target inside the source is allowed (owner decision; see PlannerTests.A_breakout_folder_inside_the_source_...).</summary>
+    /// <summary>A target inside the source is allowed (see PlannerTests.A_breakout_folder_inside_the_source_...).</summary>
     [Theory]
     [InlineData("same")]
     [InlineData("parent")]

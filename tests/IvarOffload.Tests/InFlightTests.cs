@@ -92,7 +92,7 @@ public class InFlightTests
     [Fact]
     public void Ending_a_job_keeps_a_verified_copy_whose_original_has_disappeared()
     {
-        // The case of the finding: a crash after the copy was verified, the original deleted, then "End job".
+        // A crash after the copy was verified, the original deleted, then "End job".
         using var t = new TestTree();
         Clips(t);
         Assert.Throws<SimulatedCrash>(() => t.Run(AsCopy(t.Plan()), new CrashAt("after-copied", 1)));

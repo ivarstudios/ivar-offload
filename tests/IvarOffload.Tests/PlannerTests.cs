@@ -353,7 +353,7 @@ public class PlannerTests
         Assert.Contains(project.Messages, m => m.Level == MessageLevel.Warning
             && m.Text == @"This folder is inside an editing/processing project: Premiere Pro project (Promo.prproj in D:\Edits\Promo). If the project uses these files, it will show them as missing after the move.");
 
-        // F14: processing folders without a project file (OpenDroneMap, DJI Terra) count too.
+        // Processing folders without a project file (OpenDroneMap, DJI Terra) count too.
         MovePlan odm = Plan(Scan(@"D:\Proc\ODM_Crop\images", (@"DJI_0001.JPG", 1000)),
             Env(subfolders: Table((@"D:\Proc\ODM_Crop", ["images", "odm_dem", "odm_orthophoto"]))), MoveMode.Photos,
             target: @"D:\offload-planner-test-does-not-exist\Photos");
@@ -613,7 +613,7 @@ public class PlannerTests
             photos.ToMove.Select(f => f.RelativePath));
     }
 
-    /// <summary>F03: a real clip with a photo's name (another camera counting IMG_0001, ...) is a video and needs a look.</summary>
+    /// <summary>A real clip with a photo's name (another camera counting IMG_0001, ...) is a video and needs a look.</summary>
     [Fact]
     public void A_clip_named_like_a_photo_without_the_live_photo_tag_moves_with_the_videos_and_is_pointed_out()
     {
@@ -632,7 +632,7 @@ public class PlannerTests
         Assert.True(videos.ToMove.Single().NeedsAttention);
     }
 
-    /// <summary>F04, F09: media that stays although it is of the moving side is exposed on the plan and explained.</summary>
+    /// <summary>Media that stays although it is of the moving side is exposed on the plan and explained.</summary>
     [Fact]
     public void Online_only_media_links_and_project_media_of_the_moving_side_are_listed_as_staying()
     {
@@ -675,7 +675,7 @@ public class PlannerTests
         Assert.Contains(Plan(ScanPaths(@"a\notes.txt"), Env()).Messages, m => m.Text == "No videos found in the source folder - nothing to move.");
     }
 
-    /// <summary>F04: an Atomos recorder writes its tag export (.fcpxml) next to its clips; the clips are still videos.</summary>
+    /// <summary>An Atomos recorder writes its tag export (.fcpxml) next to its clips; the clips are still videos.</summary>
     [Fact]
     public void A_recorders_fcpxml_export_does_not_keep_its_clips_in_the_source()
     {
@@ -690,7 +690,7 @@ public class PlannerTests
         Assert.Contains(plan.Messages, m => m.Text.StartsWith("1 folder(s) will be split") && m.Text.Contains(".fcpxml x1"));
     }
 
-    /// <summary>F06: frames never split from their sound silently; missing frames are pointed out.</summary>
+    /// <summary>Frames are never split from their sound silently; missing frames are pointed out.</summary>
     [Fact]
     public void Cinemadng_clips_with_missing_frames_and_frame_runs_that_are_no_clip_are_warned_about()
     {
@@ -717,7 +717,7 @@ public class PlannerTests
     }
 
     /// <summary>
-    /// F06 follow-up: tagged frame grabs next to raw photos do not make the folder a clip, and a tagged clip dumped next
+    /// Tagged frame grabs next to raw photos do not make the folder a clip, and a tagged clip dumped next
     /// to raw photos does not take their edits along: a raw and its .xmp move together, and nothing moves silently apart.
     /// </summary>
     [Fact]
@@ -744,34 +744,34 @@ public class PlannerTests
         Assert.DoesNotContain(videos.Messages, m => m.Text.Contains("missing frames"));
     }
 
-    /// <summary>F15: base-station and ground control data outside the mission folder is named when the mission moves.</summary>
+    /// <summary>Base-station and ground control data outside the mission folder is named when the mission moves.</summary>
     [Fact]
     public void Survey_data_left_outside_a_moving_mission_is_warned_about_in_photo_mode()
     {
         ScanResult scan = ScanPaths(@"Roof\DCIM\M\DJI_0001.JPG", @"Roof\DCIM\M\DJI_Timestamp.MRK", @"Roof\DCIM\M\DJI_Rinex.obs",
-            @"Roof\BASE\DRTK3_20240913.24O", @"Roof\BASE\DRTK3_20240913.24N", @"Roof\GCP\gcp_list.csv", @"Roof\DCIM\100MEDIA\DJI_0002.MP4");
+            @"Roof\BASE\DRTK3_20240119.24O", @"Roof\BASE\DRTK3_20240119.24N", @"Roof\GCP\gcp_list.csv", @"Roof\DCIM\100MEDIA\DJI_0002.MP4");
         MovePlan photos = Plan(scan, Env(), MoveMode.Photos);
         Assert.Equal(3, photos.ToMove.Count);
         Assert.Contains(photos.Messages, m => m.Level == MessageLevel.Warning && m.Text == @"Survey data outside the mapping mission folders stays in the source: "
-            + @"Roof\BASE (DRTK3_20240913.24N, DRTK3_20240913.24O), Roof\GCP (gcp_list.csv). Copy it next to the photos if you process PPK or use ground control points.");
+            + @"Roof\BASE (DRTK3_20240119.24N, DRTK3_20240119.24O), Roof\GCP (gcp_list.csv). Copy it next to the photos if you process PPK or use ground control points.");
         Assert.DoesNotContain(photos.Messages, m => m.Text.Contains("unrecognized"));
         Assert.DoesNotContain(Plan(scan, Env()).Messages, m => m.Text.StartsWith("Survey data"));
     }
 
-    /// <summary>F17 (owner decision still open): hyperlapse source frames stay photos, are kept together, and are pointed out in both modes.</summary>
+    /// <summary>Hyperlapse source frames stay photos, are kept together, and are pointed out in both modes.</summary>
     [Fact]
     public void Hyperlapse_source_frames_stay_photos_are_kept_together_and_are_pointed_out()
     {
         using var t = new TestTree();
-        for (int i = 1; i <= 12; i++) t.Add($@"240916-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_{i:D4}.JPG", 100);
-        t.Add(@"240916-Mavic3Pro\DCIM\DJI_001\DJI_20240916181000_0005_D.MP4");
+        for (int i = 1; i <= 12; i++) t.Add($@"240120-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_{i:D4}.JPG", 100);
+        t.Add(@"240120-Mavic3Pro\DCIM\DJI_001\DJI_20240120120000_0005_D.MP4");
         MovePlan videos = t.Plan();
-        Assert.Equal(new[] { @"240916-Mavic3Pro\DCIM\DJI_001\DJI_20240916181000_0005_D.MP4" }, videos.ToMove.Select(f => f.RelativePath));
+        Assert.Equal(new[] { @"240120-Mavic3Pro\DCIM\DJI_001\DJI_20240120120000_0005_D.MP4" }, videos.ToMove.Select(f => f.RelativePath));
         Assert.Contains(videos.Messages, m => m.Level == MessageLevel.Warning
-            && m.Text.StartsWith(@"1 DJI hyperlapse folder(s) hold the source frames of a hyperlapse: 240916-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005 (12 frames). They are photos and stay together with the photos"));
+            && m.Text.StartsWith(@"1 DJI hyperlapse folder(s) hold the source frames of a hyperlapse: 240120-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005 (12 frames). They are photos and stay together with the photos"));
 
         // Photo mode: a name clash on one frame keeps the whole hyperlapse in the source, never half of it.
-        string clash = Path.Join(t.Target, @"240916-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0007.JPG");
+        string clash = Path.Join(t.Target, @"240120-Mavic3Pro\DCIM\HYPERLAPSE\HYPERLAPSE_0005\HYPERLAPSE_0007.JPG");
         Directory.CreateDirectory(Path.GetDirectoryName(clash)!);
         File.WriteAllText(clash, "another hyperlapse");
         MovePlan photos = t.Plan(MoveMode.Photos);
@@ -780,7 +780,7 @@ public class PlannerTests
         Assert.Contains(photos.Messages, m => m.Text.Contains("They are photos and move together with the photos"));
     }
 
-    /// <summary>F18: two bodies counting the same numbers (a D850's NEF, a Z9's MOV): the edits follow the raw photo.</summary>
+    /// <summary>Two bodies counting the same numbers (a D850's NEF, a Z9's MOV): the edits follow the raw photo.</summary>
     [Fact]
     public void Raw_edits_matching_a_raw_and_an_mov_move_with_the_raw()
     {
