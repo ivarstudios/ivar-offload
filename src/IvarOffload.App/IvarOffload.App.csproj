@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>IVAR Offload</AssemblyName>
+    <RootNamespace>IvarOffload.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- The WPF Fluent (Windows 11) theme is marked experimental in .NET 10. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+  </PropertyGroup>
+
+  <!-- Publishing for a runtime (dotnet publish -r win-x64 or win-arm64): one self-contained, compressed exe that
+       needs no .NET installed. Not trimmed (WPF and reflection-based JSON do not trim safely). -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="app.ico" />
+    <!-- Only the small mask is embedded (the logo next to the version). Assets\ivar-offload-icon.svg is the icon's source:
+         tools\New-AppIcon.ps1 builds app.ico and the mask from it. -->
+    <Resource Include="Assets\ivar-offload-mask.png" />
+    <ProjectReference Include="..\IvarOffload.Core\IvarOffload.Core.csproj" />
+  </ItemGroup>
+
+</Project>

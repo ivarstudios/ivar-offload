@@ -1,0 +1,363 @@
+<Application x:Class="IvarOffload.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:IvarOffload.App"
+             xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+             ThemeMode="System"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <local:VisibleWhen x:Key="VisibleWhen" />
+        <local:UpperAreaHeight x:Key="UpperAreaHeight" />
+        <local:MoreBelow x:Key="MoreBelow" />
+        <local:ShrinkingWidth x:Key="ShrinkingWidth" />
+        <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="20" />
+        </Style>
+
+        <Style x:Key="Caption" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="Overline" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+
+        <Style x:Key="Icon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SizeCell" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Margin" Value="12,0,16,0" />
+            <!-- Follow the cell's colour: the theme changes it for a selected row. -->
+            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=DataGridCell}}" />
+        </Style>
+
+        <!-- A button that reads as a link: for secondary actions next to text. -->
+        <Style x:Key="LinkButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="2,4" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <TextBlock x:Name="Label" Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" TextDecorations="Underline" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Opacity" Value="0.8" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A quiet button without a frame (an icon and a few words), for tools next to the mode switch. -->
+        <Style x:Key="QuietButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="5" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Face" CornerRadius="14" Background="Transparent" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="Transparent">
+                            <ContentPresenter VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Mode colours: each mode's tab, accent line and main button, so it is always clear which mode is open.
+             White text on both keeps a contrast of about 5:1 in the light and the dark theme. -->
+        <SolidColorBrush x:Key="BackupAccent" Color="#0B7A66" />
+        <SolidColorBrush x:Key="SortAccent" Color="#4F46E5" />
+
+        <!-- The main button of a mode (Scan, Start, Resume), filled with the mode's colour: each tab defines ModeAccentBrush. -->
+        <SolidColorBrush x:Key="ModeAccentBrush" Color="#0B7A66" />
+        <Style x:Key="ModeButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource ModeAccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="16,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Face" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"
+                                BorderThickness="1" BorderBrush="#33FFFFFF">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Face" Property="Opacity" Value="0.88" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Face" Property="Opacity" Value="0.75" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Face" Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The mode switch: two pills in one quiet track, centred at the top. The selected one is filled with its mode
+             colour (the TabItem's Tag). -->
+        <Style x:Key="ModeTabItem" TargetType="TabItem">
+            <!-- The tab's page inherits this colour, so it stays the normal text colour; only the pill's own label is
+                 coloured below (a white Foreground here made every text on the page white, invisible in the light theme). -->
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <!-- No margin: a TabPanel arranges each tab without its margin, which would cut the pill off. The gap is in the template. -->
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Pill" CornerRadius="17" Padding="26,7" MinWidth="150" Margin="2,0" Background="Transparent"
+                                BorderThickness="2" BorderBrush="Transparent">
+                            <ContentPresenter x:Name="Label" ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="IsSelected" Value="False" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter TargetName="Label" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </MultiTrigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Pill" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+                                <Setter TargetName="Label" Property="TextElement.Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The mode tab control: the switch centred, then the selected mode's page. -->
+        <Style x:Key="ModeTabs" TargetType="TabControl">
+            <Setter Property="ItemContainerStyle" Value="{StaticResource ModeTabItem}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" HorizontalAlignment="Center" Padding="3" CornerRadius="20" BorderThickness="1"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                <TabPanel IsItemsHost="True" KeyboardNavigation.TabIndex="1" />
+                            </Border>
+                            <!-- The name lets UI Automation (screen readers, the GUI tests) reach the tab's content. -->
+                            <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" />
+                        </DockPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The column between the two sides: the arrow and what travels along it. -->
+        <GridLength x:Key="TravelColumn">280</GridLength>
+
+        <!-- The page's content, from the top (centring the setup in the height left a large empty band above it). -->
+        <Style x:Key="CentredWhileSetup" TargetType="StackPanel">
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+
+        <!-- The two sides of a job, left to right in the direction the files travel: FROM (the source) and TO (the destinations). -->
+        <Style x:Key="SidePanel" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Padding" Value="24,20,24,24" />
+        </Style>
+        <Style x:Key="SideLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ModeAccentBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+        <Style x:Key="FieldTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- The arrow between the two sides. -->
+        <Style x:Key="TravelArrow" TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+            <Setter Property="Text" Value="&#xE72A;" />
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource ModeAccentBrush}" />
+        </Style>
+
+        <!-- A choice between a few options, as pills (Videos / Photos): the chosen one is outlined in the mode colour. -->
+        <Style x:Key="ChoicePill" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Pill" CornerRadius="16" Padding="16,6" BorderThickness="1" Background="Transparent"
+                                BorderBrush="{DynamicResource ControlStrokeColorSecondaryBrush}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <!-- Chosen: outlined in the mode colour, not filled like a button (it is a choice, not an action) -->
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+                                <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource ModeAccentBrush}" />
+                                <Setter TargetName="Pill" Property="BorderThickness" Value="2" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Pill" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Extra information: the (i) button, or a quiet link with a label, that opens its content in a popup. -->
+        <Style TargetType="local:InfoTip">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="local:InfoTip">
+                        <Grid>
+                            <ToggleButton x:Name="PART_Toggle" Cursor="Hand" Padding="5"
+                                          IsChecked="{Binding IsOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                          AutomationProperties.Name="{TemplateBinding AutomationProperties.Name}"
+                                          AutomationProperties.AutomationId="{TemplateBinding AutomationProperties.AutomationId}"
+                                          Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Face" CornerRadius="14" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                                BorderThickness="1" BorderBrush="Transparent">
+                                            <ContentPresenter VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Face" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Face" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE946;" FontSize="15" />
+                                    <TextBlock x:Name="LabelText" Text="{TemplateBinding Label}" Margin="7,0,3,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup" IsOpen="{Binding IsChecked, ElementName=PART_Toggle}" StaysOpen="False"
+                                   PlacementTarget="{Binding ElementName=PART_Toggle}" Placement="Bottom" VerticalOffset="2" HorizontalOffset="-12"
+                                   AllowsTransparency="True" PopupAnimation="Fade">
+                                <!-- The margin leaves room for the shadow. -->
+                                <Border Margin="12,4,12,16" MaxWidth="{TemplateBinding PopupWidth}" Padding="20,16" CornerRadius="8" BorderThickness="1"
+                                        Background="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}" BorderBrush="{DynamicResource SurfaceStrokeColorFlyoutBrush}"
+                                        TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="18" ShadowDepth="4" Direction="270" Opacity="0.28" />
+                                    </Border.Effect>
+                                    <ContentPresenter Content="{TemplateBinding Content}">
+                                        <ContentPresenter.Resources>
+                                            <DataTemplate DataType="{x:Type sys:String}">
+                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" LineHeight="20" />
+                                            </DataTemplate>
+                                        </ContentPresenter.Resources>
+                                    </ContentPresenter>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Label" Value="">
+                                <Setter TargetName="LabelText" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- In a popup: a heading and numbered steps. -->
+        <Style x:Key="PopupHeading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="PopupStep" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="Margin" Value="0,10,0,0" />
+            <Setter Property="LineHeight" Value="20" />
+        </Style>
+
+        <!-- The IVAR logo: the mask image filled with the text colour, so it follows the light/dark theme. -->
+        <ImageBrush x:Key="LogoMask" ImageSource="Assets/ivar-offload-mask.png" Stretch="Uniform" />
+
+        <!-- Tile captions: at most three lines; the whole text is in the tooltip. -->
+        <Style x:Key="TileCaption" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="MaxHeight" Value="57" />
+            <Setter Property="TextTrimming" Value="WordEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <!-- List cells: one line, trimmed, with the whole text as a tooltip. -->
+        <Style x:Key="CellText" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+            <!-- Follow the cell's colour: the theme changes it for a selected row. -->
+            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=DataGridCell}}" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <Style x:Key="Grid" TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="GridLinesVisibility" Value="None" />
+            <Setter Property="CanUserReorderColumns" Value="False" />
+            <Setter Property="SelectionMode" Value="Extended" />
+            <Setter Property="EnableRowVirtualization" Value="True" />
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+            <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel" />
+        </Style>
+    </Application.Resources>
+</Application>

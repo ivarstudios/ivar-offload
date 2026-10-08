@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IvarOffload.App/IvarOffload.App.csproj" />
+    <Project Path="src/IvarOffload.Cli/IvarOffload.Cli.csproj" />
+    <Project Path="src/IvarOffload.Core/IvarOffload.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IvarOffload.Tests/IvarOffload.Tests.csproj" />
+  </Folder>
+</Solution>

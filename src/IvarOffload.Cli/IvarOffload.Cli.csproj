@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ivar-offload</AssemblyName>
+    <RootNamespace>IvarOffload.Cli</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Publishing for a runtime (dotnet publish -r win-x64 or win-arm64): one self-contained, compressed exe that
+       needs no .NET installed. Not trimmed (reflection-based JSON does not trim safely). -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IvarOffload.Core\IvarOffload.Core.csproj" />
+  </ItemGroup>
+
+</Project>

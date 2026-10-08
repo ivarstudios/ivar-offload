@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 173.2 200" width="173.2" height="200">
+  <!-- IVAR Offload: the IVAR Studios hexagon (ink #333333, white inside) and an SD card (24 x 32 mm) with an offload arrow.
+       tools/New-AppIcon.ps1 builds app.ico and the in-app logo from this file. -->
+  <polygon points="86.6,0 173.2,50 173.2,150 86.6,200 0,150 0,50" fill="#333333"/>
+  <polygon points="86.6,16.3 158.5,58.15 158.5,141.85 86.6,183.7 14.1,141.85 14.1,58.15" fill="#ffffff"/>
+  <path d="M57.2,58 L106.287,58 L118.1,69.8125 L118.1,139.9 Q118.1,142 116,142 L57.2,142 Q55.1,142 55.1,139.9 L55.1,60.1 Q55.1,58 57.2,58 Z" fill="#333333"/>
+  <rect x="62.975" y="63.88" width="6.3" height="14.28" fill="#ffffff"/>
+  <rect x="74.2625" y="63.88" width="6.3" height="14.28" fill="#ffffff"/>
+  <rect x="85.55" y="63.88" width="6.3" height="14.28" fill="#ffffff"/>
+  <rect x="96.8375" y="63.88" width="6.3" height="14.28" fill="#ffffff"/>
+  <polygon points="79.67,89.92 93.53,89.92 93.53,111.76 105.5,111.76 86.6,131.92 67.7,111.76 79.67,111.76" fill="#ffffff"/>
+</svg>

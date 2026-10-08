@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Symbols inside each assembly: stack traces keep line numbers, and a published exe needs no .pdb next to it. -->
+    <DebugType>embedded</DebugType>
+    <Version>1.0.0</Version>
+    <Product>IVAR Offload</Product>
+    <Company>IVAR Studios</Company>
+    <Copyright>Copyright © 2026 IVAR Studios. Licensed under the GNU GPL v3.0.</Copyright>
+    <!-- Also the executables' file description (Task Manager, file properties). -->
+    <AssemblyTitle>IVAR Offload</AssemblyTitle>
+  </PropertyGroup>
+</Project>
