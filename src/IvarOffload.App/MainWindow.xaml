@@ -50,7 +50,7 @@
             <TabControl SelectedIndex="{Binding SelectedModeTab}" AutomationProperties.AutomationId="ModeTabs" Style="{StaticResource ModeTabs}">
 
                 <!-- =============================================== BACKUP =============================================== -->
-                <TabItem Tag="{StaticResource BackupAccent}" AutomationProperties.AutomationId="BackupTab" AutomationProperties.Name="Backup">
+                <TabItem AutomationProperties.AutomationId="BackupTab" AutomationProperties.Name="Backup">
                     <TabItem.Header>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE8C8;" Margin="0,0,10,0" />
@@ -61,7 +61,7 @@
                 </TabItem>
 
                 <!-- ================================================ SORT ================================================ -->
-                <TabItem Tag="{StaticResource SortAccent}" AutomationProperties.AutomationId="SortTab" AutomationProperties.Name="Sort">
+                <TabItem AutomationProperties.AutomationId="SortTab" AutomationProperties.Name="Sort">
                     <TabItem.Header>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE8CB;" Margin="0,0,10,0" />
@@ -69,13 +69,6 @@
                         </StackPanel>
                     </TabItem.Header>
                     <DockPanel Margin="0,36,0,0">
-                        <DockPanel.Resources>
-                            <!-- The Sort colour for everything accented on this tab: buttons, progress bars, check boxes. -->
-                            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#4F46E5" />
-                            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#4F46E5" Opacity="0.9" />
-                            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#4F46E5" Opacity="0.8" />
-                            <SolidColorBrush x:Key="ModeAccentBrush" Color="#4F46E5" />
-                        </DockPanel.Resources>
 
                         <!-- Action bar: always visible -->
                         <Border DockPanel.Dock="Bottom" Margin="0,16,0,0" Padding="0,18,0,0" BorderThickness="0,1,0,0"
@@ -125,7 +118,7 @@
                                             <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressRight}" Style="{StaticResource Caption}" Margin="12,0,0,0" />
                                             <TextBlock Text="{Binding ProgressLeft}" />
                                         </DockPanel>
-                                        <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="6" Margin="0,8,0,6" Foreground="{StaticResource SortAccent}" />
+                                        <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="6" Margin="0,8,0,6" Foreground="{DynamicResource AccentFillColorDefaultBrush}" />
                                         <TextBlock Text="{Binding ProgressFile}" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                     <DockPanel Visibility="{Binding IsRunning, Converter={StaticResource VisibleWhen}, ConverterParameter=invert}">
@@ -294,7 +287,7 @@
                                                 <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="20" VerticalAlignment="Top" Margin="0,2,14,0"
                                                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                    <Button Content="Resume" Command="{Binding ResumeJobCommand}" AutomationProperties.AutomationId="ResumeButton" Style="{StaticResource ModeButton}" MinWidth="110" Margin="0,0,8,0" />
+                                                    <Button Content="Resume" Command="{Binding ResumeJobCommand}" AutomationProperties.AutomationId="ResumeButton" Style="{StaticResource PrimaryButton}" MinWidth="110" Margin="0,0,8,0" />
                                                     <Button Content="{Binding CloseJobText}" Command="{Binding CloseJobCommand}" AutomationProperties.AutomationId="CloseJobButton" MinWidth="110"
                                                             ToolTip="{Binding CloseJobToolTip}" />
                                                 </StackPanel>
@@ -461,7 +454,7 @@
                                         <Border Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,10" Visibility="{Binding HasSuggestedSource, Converter={StaticResource VisibleWhen}}">
                                             <DockPanel>
                                                 <Button DockPanel.Dock="Right" Content="Use this folder" Command="{Binding UseSuggestedSourceCommand}" AutomationProperties.AutomationId="UseSuggestedSourceButton"
-                                                        Style="{StaticResource ModeButton}" MinWidth="140" Margin="12,0,0,0" />
+                                                        Style="{StaticResource PrimaryButton}" MinWidth="140" Margin="12,0,0,0" />
                                                 <TextBlock VerticalAlignment="Center" TextWrapping="Wrap">
                                                     <Run Text="Sort the whole card instead:" />
                                                     <Run Text="{Binding SuggestedSource, Mode=OneWay}" FontWeight="SemiBold" />

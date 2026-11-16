@@ -22,6 +22,12 @@ Licensed under the MIT license: <https://github.com/dotnet/runtime/blob/main/LIC
 > COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 > OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## Montserrat
+
+Copyright 2011 The Montserrat Project Authors (<https://github.com/JulietaUla/Montserrat>). The app's typeface (IVAR
+Studios design system), built into `IVAR Offload.exe`. Licensed under the SIL Open Font License, Version 1.1:
+[src/IvarOffload.App/Assets/Fonts/OFL.txt](src/IvarOffload.App/Assets/Fonts/OFL.txt) and <https://openfontlicense.org>.
+
 ## ASC MHL
 
 The ASC MHL format (version 2) is a specification of the American Society of Cinematographers; IVAR Offload writes it

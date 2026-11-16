@@ -26,6 +26,8 @@
     <!-- Only the small mask is embedded (the logo next to the version). Assets\ivar-offload-icon.svg is the icon's source:
          tools\New-AppIcon.ps1 builds app.ico and the mask from it. -->
     <Resource Include="Assets\ivar-offload-mask.png" />
+    <!-- IVAR design system: Montserrat for all text (SIL OFL 1.1, see Assets\Fonts\OFL.txt). -->
+    <Resource Include="Assets\Fonts\*.ttf" />
     <ProjectReference Include="..\IvarOffload.Core\IvarOffload.Core.csproj" />
   </ItemGroup>
 

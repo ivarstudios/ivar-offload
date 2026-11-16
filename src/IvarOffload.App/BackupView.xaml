@@ -4,13 +4,6 @@
              xmlns:local="clr-namespace:IvarOffload.App"
              >
     <UserControl.Resources>
-        <!-- The Backup colour for everything accented on this tab: buttons, progress bars, check boxes. -->
-        <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#0B7A66" />
-        <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#0B7A66" Opacity="0.9" />
-        <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#0B7A66" Opacity="0.8" />
-        <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#12A38A" />
-        <SolidColorBrush x:Key="ModeAccentBrush" Color="#0B7A66" />
-
         <DataTemplate x:Key="MessageTemplate" DataType="{x:Type local:MessageRow}">
             <DockPanel Margin="0,0,0,6">
                 <TextBlock x:Name="icon" Style="{StaticResource Icon}" Text="{Binding Icon}" VerticalAlignment="Top" Margin="0,2,10,0"
@@ -60,7 +53,7 @@
                             <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressRight}" Style="{StaticResource Caption}" Margin="12,0,0,0" />
                             <TextBlock Text="{Binding ProgressLeft}" AutomationProperties.AutomationId="BackupProgressText" />
                         </DockPanel>
-                        <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="6" Margin="0,8,0,6" Foreground="{StaticResource BackupAccent}" />
+                        <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="1" Height="6" Margin="0,8,0,6" Foreground="{DynamicResource AccentFillColorDefaultBrush}" />
                         <TextBlock Text="{Binding ProgressFile}" Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                     <DockPanel Visibility="{Binding ShowProgress, Converter={StaticResource VisibleWhen}, ConverterParameter=invert}">
@@ -189,7 +182,7 @@
                                    Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0"
                                     Visibility="{Binding BannerOffline, Converter={StaticResource VisibleWhen}, ConverterParameter=invert}">
-                            <Button Content="Resume" Command="{Binding ResumeCommand}" AutomationProperties.AutomationId="BackupResumeButton" Style="{StaticResource ModeButton}" MinWidth="110" Margin="0,0,8,0" />
+                            <Button Content="Resume" Command="{Binding ResumeCommand}" AutomationProperties.AutomationId="BackupResumeButton" Style="{StaticResource PrimaryButton}" MinWidth="110" Margin="0,0,8,0" />
                             <Button Content="Stop here..." Command="{Binding CloseJobCommand}" AutomationProperties.AutomationId="BackupEndButton" MinWidth="110"
                                     ToolTip="Ends this backup and keeps the files that the app copied. It deletes nothing. You do not need the card for this." />
                         </StackPanel>
@@ -331,7 +324,7 @@
                             </DockPanel>
                             <!-- The name is always made from the choice in the list, with the description added; "Saved as" shows the result -->
                             <DockPanel Margin="0,0,0,8">
-                                <TextBlock DockPanel.Dock="Left" Text="Made from" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,10,0" Width="86" />
+                                <TextBlock DockPanel.Dock="Left" Text="Made from" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,10,0" Width="100" />
                                 <ComboBox ItemsSource="{Binding NamePresets}" SelectedItem="{Binding SelectedPreset}" AutomationProperties.AutomationId="BackupNamePresets"
                                           AutomationProperties.Name="Make the folder name from" ToolTip="If you choose an item, the app changes the folder name below. The app keeps your choice for every new backup.">
                                     <ComboBox.ItemTemplate>
@@ -351,7 +344,7 @@
                                 </ComboBox>
                             </DockPanel>
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Left" Text="Description" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,10,0" Width="86" />
+                                <TextBlock DockPanel.Dock="Left" Text="Description" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,10,0" Width="100" />
                                 <TextBox AutomationProperties.AutomationId="BackupDescriptionBox" AutomationProperties.Name="Description (optional)" VerticalContentAlignment="Center"
                                          Text="{Binding Description, UpdateSourceTrigger=PropertyChanged, Delay=150}"
                                          ToolTip="Optional. The app adds it to the end of the folder name, for example KebnekaiseFlight." />
@@ -446,7 +439,7 @@
                                             <Run Text="{Binding Folder, Mode=OneWay}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontWeight="Normal" />
                                         </TextBlock>
                                     </DockPanel>
-                                    <ProgressBar Value="{Binding Fraction, Mode=OneWay}" Maximum="1" Height="4" Margin="0,8,0,0" Foreground="{StaticResource BackupAccent}" />
+                                    <ProgressBar Value="{Binding Fraction, Mode=OneWay}" Maximum="1" Height="4" Margin="0,8,0,0" Foreground="{DynamicResource AccentFillColorDefaultBrush}" />
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
@@ -460,7 +453,7 @@
                             Visibility="{Binding HasTopUpOffer, Converter={StaticResource VisibleWhen}}">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE81C;" FontSize="20" VerticalAlignment="Top" Margin="0,2,14,0"
-                                       Foreground="{StaticResource BackupAccent}" />
+                                       Foreground="{DynamicResource AccentFillColorDefaultBrush}" />
                             <StackPanel>
                                 <TextBlock Text="This card has an earlier backup" FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding TopUpText}" AutomationProperties.AutomationId="BackupTopUpText" TextWrapping="Wrap" Margin="0,4,0,0" />

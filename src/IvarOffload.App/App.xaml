@@ -96,24 +96,19 @@
             </Setter>
         </Style>
 
-        <!-- Mode colours: each mode's tab, accent line and main button, so it is always clear which mode is open.
-             White text on both keeps a contrast of about 5:1 in the light and the dark theme. -->
-        <SolidColorBrush x:Key="BackupAccent" Color="#0B7A66" />
-        <SolidColorBrush x:Key="SortAccent" Color="#4F46E5" />
-
-        <!-- The main button of a mode (Scan, Start, Resume), filled with the mode's colour: each tab defines ModeAccentBrush. -->
-        <SolidColorBrush x:Key="ModeAccentBrush" Color="#0B7A66" />
+        <!-- IVAR design system: colour is a signal. Glacier teal (the Fluent accent keys, set in Themes/Ivar*.xaml) marks
+             what you can click and the labels; orange marks the one main action on a screen (Scan, Start, Confirm, Done). -->
+        <!-- The one main action of a screen: orange with an ink label, filled, label centred, 8 px corners. -->
         <Style x:Key="ModeButton" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource ModeAccentBrush}" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource IvarActionBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource IvarOnActionBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Padding" Value="16,6" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Face" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"
-                                BorderThickness="1" BorderBrush="#33FFFFFF">
+                        <Border x:Name="Face" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -132,8 +127,14 @@
             </Setter>
         </Style>
 
+        <!-- A main button that is not the screen's one action (Resume a job, Use this folder): teal with a white label. -->
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ModeButton}">
+            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+        </Style>
+
         <!-- The mode switch: two pills in one quiet track, centred at the top. The selected one is filled with its mode
-             colour (the TabItem's Tag). -->
+             colour is teal with a white label (a pill). -->
         <Style x:Key="ModeTabItem" TargetType="TabItem">
             <!-- The tab's page inherits this colour, so it stays the normal text colour; only the pill's own label is
                  coloured below (a white Foreground here made every text on the page white, invisible in the light theme). -->
@@ -161,8 +162,8 @@
                                 <Setter TargetName="Label" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                             </MultiTrigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Pill" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
-                                <Setter TargetName="Label" Property="TextElement.Foreground" Value="White" />
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                <Setter TargetName="Label" Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -203,9 +204,10 @@
             <Setter Property="Padding" Value="24,20,24,24" />
         </Style>
         <Style x:Key="SideLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource ModeAccentBrush}" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontWeight" Value="Bold" />
+            <!-- An eyebrow: teal caps, letter-spaced -->
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Margin" Value="0,0,0,4" />
         </Style>
         <Style x:Key="FieldTitle" TargetType="TextBlock">
@@ -218,10 +220,10 @@
             <Setter Property="Text" Value="&#xE72A;" />
             <Setter Property="FontSize" Value="30" />
             <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="Foreground" Value="{DynamicResource ModeAccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
         </Style>
 
-        <!-- A choice between a few options, as pills (Videos / Photos): the chosen one is outlined in the mode colour. -->
+        <!-- A choice between a few options, as pills (Videos / Photos), fully round: the chosen one is a soft pill, a teal tint with teal text. -->
         <Style x:Key="ChoicePill" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             <Setter Property="Cursor" Value="Hand" />
@@ -236,11 +238,11 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Pill" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </Trigger>
-                            <!-- Chosen: outlined in the mode colour, not filled like a button (it is a choice, not an action) -->
+                            <!-- Chosen: a soft teal pill, not filled like a button (it is a choice, not an action) -->
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-                                <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource ModeAccentBrush}" />
-                                <Setter TargetName="Pill" Property="BorderThickness" Value="2" />
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource IvarSoftFillBrush}" />
+                                <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                 <Setter Property="FontWeight" Value="SemiBold" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
