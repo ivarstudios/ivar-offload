@@ -650,6 +650,9 @@ release notes list the SHA-256 of the zip files.
   finds the drive automatically.
 - The window uses software rendering on purpose. With virtual display adapters (Parsec), the GPU path of WPF can show a
   blank first frame.
+- The window uses the IVAR Studios design system. The colours for the light and the dark theme are in
+  `src/IvarOffload.App/Themes`. Teal is for labels, links and the selected tab. Orange is only for the one main button
+  on each screen. The Montserrat font is in the exe, so a PC does not need to have the font.
 
 ## License
 
@@ -660,7 +663,8 @@ must include its source code.
 The IVAR name and the IVAR Studios logo are trademarks of IVAR Studios. The GPL does not give a license for them
 (section 7(e) of the license). If you distribute a changed version, it must have its own name and icon.
 
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) covers the .NET runtime that the published programs include.
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) covers the .NET runtime that the published programs include, and the
+Montserrat font (SIL Open Font License 1.1).
 
 [issues]: https://github.com/ivarstudios/ivar-offload/issues
 [i1]: https://github.com/ivarstudios/ivar-offload/issues/1
